@@ -1,16 +1,26 @@
-models:
-  parser_llm:
-    backend: llama_cpp
-    model_path: models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
-    n_ctx: 2048
-    n_gpu_layers: -1
-    temperature: 0.1
-    max_tokens: 150
+# configs/models.yaml
 
-  generator_llm:
-    backend: llama_cpp
-    model_path: models/Qwen2.5-3B-Instruct-Q4_K_M.gguf
-    n_ctx: 4096
-    n_gpu_layers: -1
-    temperature: 0.3
-    max_tokens: 800
+parser:
+  type: "llama_cpp"
+  model_path: "models/qwen2.5-0.5b-instruct.gguf"
+  context_window: 512       
+  gpu_layers: -1           
+  temperature: 0.0          
+  max_tokens: 150           
+  chat_format: "chatml"     
+
+generator:
+  type: "llama_cpp"
+  model_path: "models/qwen2.5-1.5b-instruct.gguf"
+  context_window: 4096      
+  gpu_layers: -1
+  temperature: 0.3          
+  max_tokens: 1024          
+  chat_format: "chatml"     
+
+reranker:
+  type: "cross_encoder"                 
+  model_path: "BAAI/bge-reranker-base"  
+  max_length: 512
+  device: "cuda"                        
+  top_k: 5

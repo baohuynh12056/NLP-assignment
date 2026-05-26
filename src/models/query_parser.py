@@ -1,75 +1,54 @@
 import json
-from typing import List
-from llama_cpp import Llama
+from core.llm.base import BaseLLM
+from utils.config_loader import GLOBAL_CONFIG
+from utils.logger import get_logger
 
-from core.base_llm import BaseLLM
-from core.schemas import ParsedQuery, Chunk
+# Initialize module logger
+logger = get_logger(__name__)
 
 
-class MicroParserLLM(BaseLLM):
-    """
-    An lightweight LLM dedicated ONLY to parsing queries.
-    """
+class QueryParser:
+    """Agent responsible for optimizing user queries and extracting metadata filters."""
 
-    def __init__(self, model_path: str, n_ctx: int = 4096, n_gpu_layers: int = -1):
+    def __init__(self, llm: BaseLLM):
+        self.llm = llm
+        # Load the parser system prompt from global configuration
+        self.system_prompt = GLOBAL_CONFIG["prompts"]["parser"]["system"]
+
+    def parse(self, raw_query: str) -> dict:
         """
-        Initializes the micro LLM. Context size is kept very small (512) for max speed.
+        Parses the raw query to extract filters and an optimized semantic query.
+
+        Args:
+            raw_query (str): The initial query provided by the user.
+
+        Returns:
+            dict: A dictionary containing 'optimized_query' and 'filters'.
         """
-        print(f"Loading tiny model from: {model_path}")
-        self.llm = Llama(
-            model_path=model_path,
-            n_ctx=n_ctx,
-            n_gpu_layers=n_gpu_layers,  # Fast GPU offloading
-            verbose=False,
-        )
+        logger.info(f"Parsing raw query: '{raw_query}'")
 
-    def parse_query(self, raw_query: str) -> ParsedQuery:
-        """
-        Extracts library_name and rewrites the query using JSON Schema enforcement.
-        """
-        system_prompt = (
-            "You are a routing agent. Extract 'library_name' from the query if it exists "
-            "Rewrite the query to be clear for semantic search. "
-            "Respond strictly in JSON."
-        )
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": raw_query},
+        ]
 
-        prompt = (
-            f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-            f"<|im_start|>user\n{raw_query}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
-        )
+        # Force temperature to 0.0 for deterministic JSON extraction
+        raw_output = self.llm.chat_completion(messages, temperature=0.0)
 
-        # Force the tiny model to output JSON adhering to our exact schema
-        json_schema = {
-            "type": "object",
-            "properties": {
-                "optimized_query": {"type": "string"},
-                "filters": {
-                    "type": "object",
-                    "properties": {"library_name": {"type": "string"}},
-                },
-            },
-            "required": ["optimized_query", "filters"],
-        }
+        try:
+            # Clean up Markdown JSON formatting if present
+            if raw_output.startswith("```json"):
+                raw_output = raw_output[7:-3].strip()
 
-        response = self.llm(
-            prompt,
-            max_tokens=100,
-            temperature=0.0,  # 0.0 for absolute deterministic extraction
-            response_format={"type": "json_object", "schema": json_schema},
-            stop=["<|im_end|>"],
-        )
+            parsed_data = json.loads(raw_output)
+            logger.info(
+                f"Successfully extracted filters: {parsed_data.get('filters', {})}"
+            )
+            return parsed_data
 
-        output_text = response["choices"][0]["text"].strip()
-        parsed_data = json.loads(output_text)
-
-        return ParsedQuery(
-            optimized_query=parsed_data.get("optimized_query", raw_query),
-            filters=parsed_data.get("filters", {}),
-        )
-
-    def generate_answer(self, query: str, context_chunks: List[Chunk]) -> str:
-        """
-        This micro model is NOT used for generating answers.
-        """
-        raise NotImplementedError("MicroParserLLM is only designed for query parsing.")
+        except json.JSONDecodeError:
+            # Safe fallback if the LLM hallucinated or failed to output valid JSON
+            logger.warning(
+                f"Failed to parse JSON. Fallback applied. Raw output: {raw_output}"
+            )
+            return {"optimized_query": raw_query, "filters": {}}

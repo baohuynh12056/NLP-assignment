@@ -1,0 +1,14 @@
+# configs/retriever.yaml
+
+type: "pg_hybrid"
+embed_model_path: "BAAI/bge-based-en-v1.5" # Lightweight model for fast embedding
+weights:
+  semantic: 0.7  # Priority given to vector search
+  keyword: 0.3   # FTS acts as a precise keyword booster
+
+database:
+  dbname: "rag_database"
+  user: "admin"
+  password: "secretpassword"
+  host: "localhost"
+  port: 5432
