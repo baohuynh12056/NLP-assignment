@@ -1,3 +1,4 @@
 torch
 sentence-transformers
 llama-cpp-python
+psycopg2-binary

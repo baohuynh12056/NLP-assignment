@@ -1,0 +1,16 @@
+models:
+  parser_llm:
+    backend: llama_cpp
+    model_path: models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
+    n_ctx: 2048
+    n_gpu_layers: -1
+    temperature: 0.1
+    max_tokens: 150
+
+  generator_llm:
+    backend: llama_cpp
+    model_path: models/Qwen2.5-3B-Instruct-Q4_K_M.gguf
+    n_ctx: 4096
+    n_gpu_layers: -1
+    temperature: 0.3
+    max_tokens: 800
