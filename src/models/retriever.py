@@ -28,14 +28,14 @@ class DocumentRetriever:
             List[Chunk]: The raw list of candidate chunks from the database.
         """
         logger.info(
-            f"Agent starting retrieval for optimized query: '{parsed_query.optimized_query}'"
-        )
+                    f"Agent starting retrieval for optimized query: '{parsed_query.get('optimized_query', '')}'"
+                )
 
         # Execute the core retrieval operation
         candidates = self.retriever_model.retrieve(
-            query=parsed_query.optimized_query,
+            query=parsed_query.get("optimized_query", ""),
             top_k=top_k,
-            filters=parsed_query.filters,
+            filters=parsed_query.get("filters", {}),
         )
 
         if not candidates:

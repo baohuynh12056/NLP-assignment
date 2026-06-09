@@ -36,8 +36,8 @@ class AnswerGenerator:
         # Format the retrieved context chunks into a clean, readable string
         context_str = "\n\n---\n\n".join(
             [
-                f"Function: {c.get('metadata', {}).get('func_name', 'Unknown')}\n"
-                f"Docstring: {c.get('content', '')}"
+                f"Function: {c.metadata.get('func_name', 'Unknown')}\n"
+                f"Docstring: {c.content}"
                 for c in context_chunks
             ]
         )

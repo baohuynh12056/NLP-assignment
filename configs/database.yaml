@@ -1,0 +1,6 @@
+# configs/database.yaml
+dbname: "rag_database"       
+user: "postgres"             
+password: "mysecretpassword" 
+host: "db"            
+port: 5432

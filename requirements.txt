@@ -2,3 +2,8 @@ torch
 sentence-transformers
 llama-cpp-python
 psycopg2-binary
+pydantic
+requests
+bs4
+fastapi
+uvicorn
