@@ -56,19 +56,31 @@ class MicroParserLLM(BaseLLM):
             "required": ["optimized_query", "filters"]
         }
 
-        response = self.llm(
-            prompt,
-            max_tokens=100,
-            temperature=0.0, # 0.0 for absolute deterministic extraction
-            response_format={
-                "type": "json_object",
-                "schema": json_schema
-            },
-            stop=["<|im_end|>"]
-        )
+        try:
+            response = self.llm(
+                prompt,
+                max_tokens=100,
+                temperature=0.0, # 0.0 for absolute deterministic extraction
+                response_format={
+                    "type": "json_object",
+                    "schema": json_schema
+                },
+                stop=["<|im_end|>"]
+            )
+        except TypeError:
+            response = self.llm(
+                prompt,
+                max_tokens=100,
+                temperature=0.0,
+                stop=["<|im_end|>"]
+            )
         
         output_text = response["choices"][0]["text"].strip()
-        parsed_data = json.loads(output_text)
+        try:
+            parsed_data = json.loads(output_text)
+        except json.JSONDecodeError:
+            print(f"[MicroParserLLM] Warning: Failed to parse JSON. Raw output: {output_text}")
+            return ParsedQuery(optimized_query=raw_query, filters={})
         
         return ParsedQuery(
             optimized_query=parsed_data.get("optimized_query", raw_query),

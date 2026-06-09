@@ -1,0 +1,12 @@
+# Libraries used as data sources for docstring/signature introspection.
+# Install these before running src/data_pipeline/dataset_builder.py.
+pandas
+numpy
+scikit-learn
+torch
+tensorflow
+matplotlib
+scipy
+seaborn
+requests
+fastapi

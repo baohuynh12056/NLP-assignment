@@ -28,7 +28,7 @@ class QueryProcessor:
         # Default fallback list (you can load this dynamically from PostgreSQL later)
         self.supported_libraries = supported_libraries or [
             "pandas", "numpy", "sklearn", "torch", "tensorflow", 
-            "matplotlib", "scipy", "itertools", "collections"
+            "matplotlib", "scipy", "seaborn", "requests", "fastapi"
         ]
 
     def process(self, raw_query: str) -> ParsedQuery:

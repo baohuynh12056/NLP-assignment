@@ -4,10 +4,11 @@ from llama_cpp import Llama
 
 from core.base_llm import BaseLLM
 from core.schemas import ParsedQuery, Chunk
+from pipeline.prompt_builder import PromptBuilder
 
 class QwenLocalLLM(BaseLLM):
     """
-    Implementation of BaseLLM using Qwen2.5-1.5B-Instruct in GGUF format.
+    Implementation of BaseLLM using a local Qwen instruct model in GGUF format.
     Runs locally via llama.cpp, highly optimized for end-devices with GPU offloading.
     """
 
@@ -84,13 +85,6 @@ class QwenLocalLLM(BaseLLM):
         """
         print(f"[QwenLocalLLM] Generating answer using {len(context_chunks)} chunks...")
         
-        # 1. Format the context from retrieved chunks
-        context_str = "\n\n---\n\n".join(
-            [f"Function: {c.metadata.get('func_name', 'Unknown')}\n"
-             f"Docstring:\n{c.content}" for c in context_chunks]
-        )
-        
-        # 2. Build the RAG Prompt
         system_prompt = (
             "You are a helpful and expert Python programming assistant. "
             "Answer the user's question using ONLY the provided context. "
@@ -98,7 +92,7 @@ class QwenLocalLLM(BaseLLM):
             "If the context does not contain the answer, say 'I cannot find the exact answer in the documentation.'"
         )
         
-        user_message = f"Context Documentation:\n{context_str}\n\nUser Question: {query}"
+        user_message = PromptBuilder.build_user_message(query, context_chunks)
         
         prompt = (
             f"<|im_start|>system\n{system_prompt}<|im_end|>\n"

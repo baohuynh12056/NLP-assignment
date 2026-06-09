@@ -1,0 +1,14 @@
+{"library_name": "pandas", "question": "How do I join two dataframes on a shared column?", "expected_function": "pandas.merge", "tags": ["dataframe", "join"]}
+{"library_name": "pandas", "question": "How can I fill missing dataframe values?", "expected_function": "pandas.DataFrame.fillna", "tags": ["missing-values"]}
+{"library_name": "numpy", "question": "How do I create evenly spaced numbers over an interval?", "expected_function": "numpy.linspace", "tags": ["array"]}
+{"library_name": "numpy", "question": "How do I stack arrays vertically?", "expected_function": "numpy.vstack", "tags": ["array", "stack"]}
+{"library_name": "sklearn", "question": "How do I split arrays into train and test subsets?", "expected_function": "sklearn.model_selection.train_test_split", "tags": ["ml", "split"]}
+{"library_name": "sklearn", "question": "How do I standardize features by removing the mean?", "expected_function": "sklearn.preprocessing.StandardScaler", "tags": ["preprocessing"]}
+{"library_name": "torch", "question": "How do I create a tensor from Python data?", "expected_function": "torch.tensor", "tags": ["tensor"]}
+{"library_name": "torch", "question": "How do I disable gradient calculation during inference?", "expected_function": "torch.no_grad", "tags": ["inference"]}
+{"library_name": "tensorflow", "question": "How do I build a sequential neural network model?", "expected_function": "tensorflow.keras.Sequential", "tags": ["deep-learning"]}
+{"library_name": "matplotlib", "question": "How do I draw a simple line chart?", "expected_function": "matplotlib.pyplot.plot", "tags": ["visualization"]}
+{"library_name": "scipy", "question": "How do I optimize a scalar function?", "expected_function": "scipy.optimize.minimize", "tags": ["optimization"]}
+{"library_name": "seaborn", "question": "How do I draw a histogram with a density curve?", "expected_function": "seaborn.histplot", "tags": ["visualization"]}
+{"library_name": "requests", "question": "How do I send an HTTP GET request?", "expected_function": "requests.get", "tags": ["http"]}
+{"library_name": "fastapi", "question": "How do I declare an API application?", "expected_function": "fastapi.FastAPI", "tags": ["api"]}

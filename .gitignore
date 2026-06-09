@@ -201,6 +201,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Downloaded package cache for data-source libraries
+data/package_cache/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
