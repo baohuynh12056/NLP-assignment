@@ -1,0 +1,6 @@
+# configs/database.yaml
+dbname: "rag_database"
+user: "admin"
+password: "secretpassword"
+host: "localhost"
+port: 5432
