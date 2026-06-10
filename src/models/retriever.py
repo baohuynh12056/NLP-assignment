@@ -1,6 +1,7 @@
 from typing import List
 from core.retriever.base import BaseRetriever
 from core.schemas import Chunk, ParsedQuery
+from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
 # Initialize module logger
@@ -15,8 +16,10 @@ class DocumentRetriever:
         Initializes the retriever agent with a core DB implementation.
         """
         self.retriever_model = retriever_model
+        retriever_cfg = GLOBAL_CONFIG.get("retriever", {})
+        self.default_top_k = int(retriever_cfg.get("retrieval_k", 20))
 
-    def process(self, parsed_query: ParsedQuery, top_k: int = 20) -> List[Chunk]:
+    def process(self, parsed_query: ParsedQuery, top_k: int | None = None) -> List[Chunk]:
         """
         Executes the database retrieval using the parsed query and metadata filters.
 
@@ -34,7 +37,7 @@ class DocumentRetriever:
         # Execute the core retrieval operation
         candidates = self.retriever_model.retrieve(
             query=parsed_query.optimized_query,
-            top_k=top_k,
+            top_k=top_k or self.default_top_k,
             filters=parsed_query.filters,
         )
 

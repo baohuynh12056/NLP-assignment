@@ -40,6 +40,30 @@ class AnswerGenerator:
             logger.warning("No context chunks provided. Generating fallback response.")
             return "I'm sorry, I cannot find any relevant documentation to answer your query."
 
+        messages = self._build_messages(query, context_chunks)
+
+        # Call the LLM to generate the final response
+        # Note: temperature and max_tokens are handled by the BaseLLM configuration
+        final_answer = self._strip_thinking(self.llm.chat_completion(messages))
+
+        logger.info("Final answer generated successfully.")
+        return final_answer
+
+    def stream(self, query: str, context_chunks: list):
+        """Streams answer chunks from the configured LLM."""
+        logger.info(
+            f"Streaming answer using {len(context_chunks)} retrieved chunks..."
+        )
+
+        if not context_chunks:
+            yield "I'm sorry, I cannot find any relevant documentation to answer your query."
+            return
+
+        messages = self._build_messages(query, context_chunks)
+        for chunk in self.llm.stream_chat_completion(messages):
+            yield chunk
+
+    def _build_messages(self, query: str, context_chunks: list) -> list[dict[str, str]]:
         context_str = self._build_context(context_chunks)
         user_message = self.user_template.format(
             context=context_str,
@@ -49,17 +73,10 @@ class AnswerGenerator:
         if self.no_think:
             user_message += "\n/no_think"
 
-        messages = [
+        return [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_message},
         ]
-
-        # Call the LLM to generate the final response
-        # Note: temperature and max_tokens are handled by the BaseLLM configuration
-        final_answer = self._strip_thinking(self.llm.chat_completion(messages))
-
-        logger.info("Final answer generated successfully.")
-        return final_answer
 
     def _build_context(self, context_chunks: list) -> str:
         blocks = []

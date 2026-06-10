@@ -2,7 +2,7 @@
 
 from core.llm.base import BaseLLM
 from llama_cpp import Llama
-from typing import List, Dict, Any
+from typing import Any, Dict, Iterator, List
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -43,3 +43,21 @@ class LlamaCPPModel(BaseLLM):
             max_tokens=params["max_tokens"],
         )
         return response["choices"][0]["message"]["content"].strip()
+
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        **kwargs,
+    ) -> Iterator[str]:
+        params = {**self.default_params, **kwargs}
+        response = self.llm.create_chat_completion(
+            messages=messages,
+            temperature=params["temperature"],
+            max_tokens=params["max_tokens"],
+            stream=True,
+        )
+        for event in response:
+            delta = event["choices"][0].get("delta", {})
+            content = delta.get("content")
+            if content:
+                yield content

@@ -663,6 +663,67 @@
       }
     }
 
+    async function streamAnswer(query, mode, botBubble) {
+      const response = await fetch("/ask/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, mode }),
+      });
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Stream request failed");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedText = "";
+      let finalResponse = null;
+      let finalMeta = null;
+
+      botBubble.textContent = "";
+      botBubble.classList.add("answer");
+      metaEl.textContent = "Generating answer...";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+          if (event.type === "token") {
+            streamedText += event.text || "";
+            botBubble.textContent = streamedText;
+            scrollToBottom();
+          }
+          if (event.type === "done") {
+            finalResponse = event.response;
+            finalMeta = event;
+          }
+          if (event.type === "error") {
+            throw new Error(event.detail || "Stream failed");
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const event = JSON.parse(buffer);
+        if (event.type === "done") {
+          finalResponse = event.response;
+          finalMeta = event;
+        }
+      }
+
+      if (!finalResponse) throw new Error("Stream ended without a final response");
+      renderAnswer(botBubble, finalResponse.answer);
+      renderSources(finalResponse.sources || []);
+      return finalMeta || {};
+    }
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const query = queryEl.value.trim();
@@ -679,6 +740,13 @@
       const start = performance.now();
 
       try {
+        if (mode === "full") {
+          const streamMeta = await streamAnswer(query, mode, botBubble);
+          const seconds = streamMeta.elapsed || ((performance.now() - start) / 1000).toFixed(1);
+          metaEl.textContent = `FULL - ${seconds}s${streamMeta.cached ? " - cached" : ""}`;
+          return;
+        }
+
         const response = await fetch("/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -1,11 +1,15 @@
 import argparse
+import json
 import sys
+import time
+from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
+from typing import Iterator
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from core.llm.manager import LLMManager
@@ -29,6 +33,9 @@ if hasattr(sys.stdout, "reconfigure"):
 logger = get_logger("api")
 INDEX_HTML_PATH = Path(__file__).with_name("chat_ui.html")
 _pipeline_lock = Lock()
+_cache_lock = Lock()
+_response_cache: OrderedDict[str, RAGResponse] = OrderedDict()
+CACHE_SIZE = int(GLOBAL_CONFIG.get("retriever", {}).get("cache_size", 128))
 
 app = FastAPI(
     title="Mini Code-Assistance RAG",
@@ -66,6 +73,49 @@ def get_pipeline() -> RAGOrchestrator:
     return initialize_orchestrator()
 
 
+def _cache_key(mode: str, query: str) -> str:
+    normalized_query = " ".join((query or "").strip().lower().split())
+    return f"{mode}:{normalized_query}"
+
+
+def _cache_get(mode: str, query: str) -> RAGResponse | None:
+    key = _cache_key(mode, query)
+    with _cache_lock:
+        cached = _response_cache.get(key)
+        if cached is None:
+            return None
+        _response_cache.move_to_end(key)
+        return cached
+
+
+def _cache_set(mode: str, query: str, response: RAGResponse) -> None:
+    if CACHE_SIZE <= 0:
+        return
+    key = _cache_key(mode, query)
+    with _cache_lock:
+        _response_cache[key] = response
+        _response_cache.move_to_end(key)
+        while len(_response_cache) > CACHE_SIZE:
+            _response_cache.popitem(last=False)
+
+
+def _response_payload(response: RAGResponse) -> dict:
+    if hasattr(response, "model_dump"):
+        return response.model_dump()
+    return response.dict()
+
+
+def _json_line(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False) + "\n"
+
+
+def _stream_text(text: str, size: int = 28) -> Iterator[str]:
+    for index in range(0, len(text), size):
+        chunk = text[index : index + size]
+        if chunk:
+            yield chunk
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     if INDEX_HTML_PATH.exists():
@@ -81,15 +131,93 @@ def health() -> dict:
 @app.post("/ask", response_model=RAGResponse)
 def ask(request: AskRequest) -> RAGResponse:
     try:
+        cached = _cache_get(request.mode, request.query)
+        if cached is not None:
+            return cached
+
         # llama.cpp model instances should not be driven concurrently in this demo.
         with _pipeline_lock:
-            return get_pipeline().run_with_details(
+            response = get_pipeline().run_with_details(
                 request.query,
                 generate_answer=request.mode == "full",
             )
+            _cache_set(request.mode, request.query, response)
+            return response
     except Exception as exc:
         logger.exception("Failed to answer request")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/ask/stream")
+def ask_stream(request: AskRequest) -> StreamingResponse:
+    def events() -> Iterator[str]:
+        started_at = time.perf_counter()
+        cached = _cache_get(request.mode, request.query)
+        if cached is not None:
+            yield _json_line({"type": "meta", "cached": True})
+            for chunk in _stream_text(cached.answer):
+                yield _json_line({"type": "token", "text": chunk})
+            yield _json_line(
+                {
+                    "type": "done",
+                    "response": _response_payload(cached),
+                    "elapsed": round(time.perf_counter() - started_at, 2),
+                    "cached": True,
+                }
+            )
+            return
+
+        try:
+            with _pipeline_lock:
+                pipeline = get_pipeline()
+                parsed_query, chunks = pipeline.retrieve_context(
+                    request.query,
+                    generate_answer=request.mode == "full",
+                )
+
+                if not chunks:
+                    answer = "I'm sorry, I couldn't find any relevant functions in the database to answer your query."
+                    response = pipeline.build_response(request.query, parsed_query, chunks, answer)
+                    _cache_set(request.mode, request.query, response)
+                    yield _json_line({"type": "token", "text": answer})
+                    yield _json_line(
+                        {
+                            "type": "done",
+                            "response": _response_payload(response),
+                            "elapsed": round(time.perf_counter() - started_at, 2),
+                            "cached": False,
+                        }
+                    )
+                    return
+
+                if request.mode == "fast":
+                    answer = pipeline._build_fast_answer(chunks)
+                    response = pipeline.build_response(request.query, parsed_query, chunks, answer)
+                    _cache_set(request.mode, request.query, response)
+                    for chunk in _stream_text(answer):
+                        yield _json_line({"type": "token", "text": chunk})
+                else:
+                    answer_parts = []
+                    for chunk in pipeline.answer_generator.stream(request.query, chunks):
+                        answer_parts.append(chunk)
+                        yield _json_line({"type": "token", "text": chunk})
+                    answer = pipeline.answer_generator._strip_thinking("".join(answer_parts))
+                    response = pipeline.build_response(request.query, parsed_query, chunks, answer)
+                    _cache_set(request.mode, request.query, response)
+
+                yield _json_line(
+                    {
+                        "type": "done",
+                        "response": _response_payload(response),
+                        "elapsed": round(time.perf_counter() - started_at, 2),
+                        "cached": False,
+                    }
+                )
+        except Exception as exc:
+            logger.exception("Failed to stream answer")
+            yield _json_line({"type": "error", "detail": str(exc)})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
 
 
 def run_demo() -> None:

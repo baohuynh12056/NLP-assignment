@@ -1,14 +1,16 @@
-# NLP Assignment: Configurable Code-Assistance RAG
+# NLP Assignment: Code-Assistance RAG Chatbot
 
-Branch `newstructure` refactors the project into a cleaner, configurable RAG
-application. Models, retrievers, rerankers, and prompts are selected from YAML
-config files instead of being hard-coded in Python.
+This project is a configurable RAG chatbot for answering questions about Python
+library functions. Models, retrievers, rerankers, prompts, and demo-speed
+settings are controlled from YAML config files instead of being hard-coded in
+Python.
 
 ## What This App Does
 
 The app answers questions about Python library functions. A user asks a question,
-the pipeline retrieves relevant function documentation from PostgreSQL/pgvector,
-reranks the results, and returns an answer through a web chat UI or the `/ask` API.
+the pipeline parses the query, retrieves relevant function documentation,
+optionally reranks the results, and returns an answer through a web chat UI or
+the API.
 
 Example questions:
 
@@ -22,7 +24,7 @@ Important folders:
 
 - `configs/`: YAML configuration for models, prompts, and retrieval.
 - `src/core/llm/`: base LLM interface, llama.cpp implementation, and LLM factory.
-- `src/core/retriever/`: retriever interface, PostgreSQL/FAISS retrievers, and factory.
+- `src/core/retriever/`: retriever interface, FAISS/PostgreSQL retrievers, and factory.
 - `src/core/reranker/`: reranker interface, CrossEncoder reranker, and factory.
 - `src/models/`: business-level agents such as query parser and answer generator.
 - `src/pipeline/`: RAG orchestrator.
@@ -82,10 +84,11 @@ configs/retriever.yaml
 It controls:
 
 - embedding model path
-- retrieval count
+- retrieval count and number of context chunks
 - retriever type: `faiss_local` or `pg_hybrid`
 - FAISS index/metadata paths
-- Fast mode reranking behavior
+- Fast/Full reranking behavior
+- response cache size
 - PostgreSQL connection
 - semantic/keyword fusion weights
 
@@ -93,19 +96,26 @@ Current default:
 
 ```yaml
 type: "faiss_local"
+retrieval_k: 8
+context_k: 3
 index_path: "models/faiss/functions.index"
 metadata_path: "models/faiss/functions_metadata.jsonl"
 fast_mode_rerank: false
+full_mode_rerank: false
+cache_size: 128
 ```
 
-With this setting, Fast mode uses FAISS and skips the CrossEncoder reranker for
-much lower latency. Full mode still reranks before generation.
+With this setting, both Fast mode and Full mode use FAISS and skip the
+CrossEncoder reranker for lower demo latency. Full mode still uses the generator
+LLM, but it receives fewer context chunks and can stream text to the UI while it
+is generating.
 
 To switch back to PostgreSQL hybrid search:
 
 ```yaml
 type: "pg_hybrid"
 fast_mode_rerank: true
+full_mode_rerank: true
 ```
 
 ## Web Chat UI
@@ -126,6 +136,8 @@ Features:
 - Fast/Full mode toggle in the settings drawer.
 - Source snippets shown in the drawer.
 - Code block rendering with a copy button.
+- Full mode streaming, so the answer appears gradually instead of waiting for
+  the whole generation to finish.
 
 ## Run Locally
 
@@ -184,6 +196,8 @@ Open:
 
 ## API
 
+### Standard Answer
+
 Request:
 
 ```bash
@@ -214,6 +228,27 @@ Response includes:
 - `answer`
 - `sources`
 
+### Streaming Answer
+
+The web UI uses `/ask/stream` for Full mode. It returns newline-delimited JSON
+events:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/ask/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is pandas.merge used for?","mode":"full"}'
+```
+
+Example event types:
+
+```json
+{"type":"token","text":"Use pandas.merge..."}
+{"type":"done","response":{"answer":"...","sources":[]},"elapsed":16.05,"cached":false}
+```
+
+Repeated questions are served from an in-memory LRU cache. The cache key includes
+the selected mode and normalized query text.
+
 ## Public Demo
 
 To expose the local web app quickly:
@@ -229,6 +264,10 @@ Cloudflare will print a temporary public URL that can be shared for demos.
 - `.gguf` files are ignored and should not be pushed to GitHub.
 - `models/faiss/` is ignored and should be rebuilt locally from PostgreSQL.
 - The first request after server start is slower because models are loaded lazily.
-- Warm Fast mode requests should be much faster with `faiss_local` because they avoid PostgreSQL vector search and skip CrossEncoder reranking.
+- Warm repeated requests are much faster because they are served from the
+  in-memory response cache.
+- Fast mode is retrieval-first and avoids the generator model.
+- Full mode can be made more accurate by enabling `full_mode_rerank: true`, but
+  demo latency will increase.
 - Edit `configs/models.yaml` to switch models.
 - Edit `configs/prompts.yaml` to tune answer style and prompt format.

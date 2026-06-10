@@ -2,7 +2,7 @@ from models.query_parser import QueryParser
 from models.retriever import DocumentRetriever
 from models.reranker import DocumentReranker
 from models.answer_generator import AnswerGenerator
-from core.schemas import Chunk, RAGResponse, SourceChunk
+from core.schemas import Chunk, ParsedQuery, RAGResponse, SourceChunk
 from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
@@ -30,6 +30,8 @@ class RAGOrchestrator:
         self.answer_generator = answer_generator
         retriever_cfg = GLOBAL_CONFIG.get("retriever", {})
         self.fast_mode_rerank = bool(retriever_cfg.get("fast_mode_rerank", True))
+        self.full_mode_rerank = bool(retriever_cfg.get("full_mode_rerank", True))
+        self.context_k = int(retriever_cfg.get("context_k", self.reranker.default_top_k))
 
     def run(self, user_query: str) -> str:
         return self.run_with_details(user_query, generate_answer=True).answer
@@ -47,49 +49,18 @@ class RAGOrchestrator:
         logger.info("========== STARTING RAG PIPELINE ==========")
         logger.info(f"User Query: '{user_query}'")
 
-        # Step 1: Parse and optimize the query
-        logger.info("[Step 1/4] Parsing Query...")
-        parsed_query = self.query_parser.parse(user_query)
+        parsed_query, refined_chunks = self.retrieve_context(
+            user_query=user_query,
+            generate_answer=generate_answer,
+        )
 
-        # Step 2: Retrieve raw candidate chunks from the database
-        logger.info("[Step 2/4] Retrieving Candidates...")
-        raw_chunks = self.retriever.process(parsed_query)
-
-        if not raw_chunks:
-            logger.warning(
-                "Pipeline terminating early: No chunks retrieved from the database."
-            )
+        if not refined_chunks:
+            logger.warning("Pipeline terminating early: No relevant chunks found.")
             return RAGResponse(
                 query=user_query,
                 optimized_query=parsed_query.optimized_query,
                 filters=parsed_query.filters,
                 answer="I'm sorry, I couldn't find any relevant functions in the database to answer your query.",
-                sources=[],
-            )
-
-        refined_query = parsed_query.optimized_query or user_query
-        should_rerank = generate_answer or self.fast_mode_rerank
-        if should_rerank:
-            # Step 3: Rerank the candidates to get the most relevant top-K chunks
-            logger.info("[Step 3/4] Reranking Candidates...")
-            refined_chunks = self.reranker.process(
-                query=refined_query, candidate_chunks=raw_chunks
-            )
-        else:
-            logger.info("[Step 3/4] Skipping reranker for Fast mode...")
-            refined_chunks = raw_chunks[: self.reranker.default_top_k]
-
-        refined_chunks = self._ensure_exact_function(refined_query, raw_chunks, refined_chunks)
-
-        if not refined_chunks:
-            logger.warning(
-                "Pipeline terminating early: All chunks were filtered out during reranking."
-            )
-            return RAGResponse(
-                query=user_query,
-                optimized_query=parsed_query.optimized_query,
-                filters=parsed_query.filters,
-                answer="I'm sorry, no retrieved functions met the relevance threshold.",
                 sources=[],
             )
 
@@ -104,12 +75,67 @@ class RAGOrchestrator:
             final_answer = self._build_fast_answer(refined_chunks)
 
         logger.info("========== RAG PIPELINE COMPLETED ==========")
+        return self.build_response(user_query, parsed_query, refined_chunks, final_answer)
+
+    def retrieve_context(
+        self,
+        user_query: str,
+        generate_answer: bool = True,
+    ) -> tuple[ParsedQuery, list[Chunk]]:
+        """Parse, retrieve, and optionally rerank chunks for a user query."""
+        # Step 1: Parse and optimize the query
+        logger.info("[Step 1/4] Parsing Query...")
+        parsed_query = self.query_parser.parse(user_query)
+
+        # Step 2: Retrieve raw candidate chunks from the database
+        logger.info("[Step 2/4] Retrieving Candidates...")
+        raw_chunks = self.retriever.process(parsed_query)
+
+        if not raw_chunks:
+            logger.warning(
+                "Pipeline terminating early: No chunks retrieved from the database."
+            )
+            return parsed_query, []
+
+        refined_query = parsed_query.optimized_query or user_query
+        should_rerank = (
+            (generate_answer and self.full_mode_rerank)
+            or (not generate_answer and self.fast_mode_rerank)
+        )
+        if should_rerank:
+            # Step 3: Rerank the candidates to get the most relevant top-K chunks
+            logger.info("[Step 3/4] Reranking Candidates...")
+            refined_chunks = self.reranker.process(
+                query=refined_query, candidate_chunks=raw_chunks
+            )
+        else:
+            mode_name = "Full" if generate_answer else "Fast"
+            logger.info(f"[Step 3/4] Skipping reranker for {mode_name} mode...")
+            refined_chunks = raw_chunks[: self.context_k]
+
+        refined_chunks = self._ensure_exact_function(refined_query, raw_chunks, refined_chunks)
+
+        if not refined_chunks:
+            logger.warning(
+                "Pipeline terminating early: All chunks were filtered out during reranking."
+            )
+            return parsed_query, []
+
+        return parsed_query, refined_chunks
+
+    def build_response(
+        self,
+        user_query: str,
+        parsed_query: ParsedQuery,
+        chunks: list[Chunk],
+        answer: str,
+    ) -> RAGResponse:
         return RAGResponse(
             query=user_query,
             optimized_query=parsed_query.optimized_query,
             filters=parsed_query.filters,
-            answer=final_answer,
-            sources=[self._chunk_to_source(chunk) for chunk in refined_chunks],
+            answer=answer,
+            sources=[self._chunk_to_source(chunk) for chunk in chunks],
         )
 
     def _ensure_exact_function(
@@ -131,7 +157,7 @@ class RAGOrchestrator:
                 continue
             seen.add(key)
             deduped.append(chunk)
-        return deduped[: self.reranker.default_top_k]
+        return deduped[: self.context_k]
 
     @staticmethod
     def _prioritize_exact_function(query: str, chunks: list[Chunk]) -> list[Chunk]:
