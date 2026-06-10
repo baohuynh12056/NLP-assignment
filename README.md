@@ -1,34 +1,110 @@
 # NLP Assignment: Mini Code-Assistance RAG
 
-Mục tiêu repo là xây dựng một pipeline code assistance nhỏ gọn: người dùng hỏi về
-function trong các Python library có trong database, hệ thống retrieve đúng tài
-liệu API rồi dùng LLM local để trả lời có context.
+Repo này xây dựng một hệ thống hỏi đáp tài liệu API cho các thư viện Python phổ biến.
+Người dùng hỏi bằng ngôn ngữ tự nhiên, hệ thống sẽ rewrite query, retrieve tài liệu
+liên quan từ PostgreSQL/pgvector, rerank kết quả, rồi trả lời qua giao diện web chat.
 
-## Kiến trúc
+## Tính năng chính
 
-1. `QueryProcessor` gọi mini LLM để rewrite query và extract metadata filter.
-2. `PGHybridRetriever` chạy hai route:
-   - Keyword route: PostgreSQL full-text search.
-   - Semantic route: `sentence-transformers` embedding + pgvector.
-3. `PostgreSQLHybridSearch` normalize score hai route và fusion kết quả.
-4. `BGEReranker` rerank top candidates bằng cross-encoder nhỏ.
-5. `PromptBuilder` đóng gói top-k chunks thành RAG context.
-6. `QwenLocalLLM` sinh câu trả lời cuối qua `llama-cpp-python`.
+- Hybrid search: kết hợp keyword search của PostgreSQL và semantic search bằng embedding.
+- Reranking: dùng BGE reranker để chọn context tốt hơn trước khi trả lời.
+- Local LLM: dùng Qwen GGUF qua `llama-cpp-python`, không cần gọi API ngoài khi demo.
+- Fast mode: trả lời nhanh dựa trên retrieved docs và các rule cho câu hỏi phổ biến.
+- Full mode: dùng local Qwen model để sinh câu trả lời tự nhiên hơn.
+- Web chat UI: giao diện chat gọn, có quick prompts, code block, nút copy code, drawer nguồn tài liệu.
+- Deploy demo nhanh: có thể public bằng Cloudflare Tunnel hoặc ngrok.
 
-## 10 library benchmark ban đầu
+## Thư viện trong benchmark
+
+Dataset hiện tập trung vào các thư viện:
 
 `pandas`, `numpy`, `sklearn`, `torch`, `tensorflow`, `matplotlib`, `scipy`,
 `seaborn`, `requests`, `fastapi`.
 
+## Kiến trúc pipeline
+
+1. `QueryProcessor`
+   - Rewrite câu hỏi thành truy vấn rõ hơn cho vector search.
+   - Extract filter như `library_name`.
+   - Có rule-based fallback cho một số câu phổ biến như `pandas.merge`,
+     `pandas.read_csv`, `sklearn.model_selection.train_test_split`.
+
+2. `PGHybridRetriever`
+   - Gọi PostgreSQL full-text search cho keyword route.
+   - Gọi pgvector cho semantic route.
+
+3. `PostgreSQLHybridSearch`
+   - Chuẩn hóa điểm keyword/semantic.
+   - Fusion kết quả hai route.
+   - Tăng `ivfflat.probes` để retrieval ổn định hơn.
+
+4. `BGEReranker`
+   - Rerank top candidates bằng cross-encoder.
+
+5. `PromptBuilder`
+   - Đóng gói context docs ngắn gọn.
+   - Thêm yêu cầu trả lời theo ngôn ngữ người dùng.
+   - Giảm nguy cơ prompt quá dài bằng cách truncate docs.
+
+6. `QwenLocalLLM`
+   - Sinh câu trả lời trong Full mode.
+   - Dùng `/no_think` và lọc `<think>...</think>` nếu model sinh ra.
+
+7. `FastAPI`
+   - Serve API `/ask`, `/health`.
+   - Serve web chat UI ở `/`.
+
+## Web Chat Demo
+
+Giao diện web nằm ở:
+
+- `src/api/chat_ui.html`
+- `src/api/main.py`
+
+Trang web được thiết kế như một chatbot đơn giản:
+
+- Header cố định ở trên.
+- Vùng hội thoại cuộn riêng.
+- Ô nhập dính ở cuối màn hình.
+- Nhấn `Enter` để gửi, `Shift+Enter` để xuống dòng.
+- Có quick prompts cho các câu hỏi mẫu.
+- Câu trả lời có render code block và nút `Copy`.
+- Nguồn tài liệu và setting nằm trong drawer bên phải.
+- Không có password/auth, phù hợp demo nhanh trong mạng local hoặc qua tunnel.
+
+Hai chế độ trả lời:
+
+- `Fast`: nhanh hơn, dùng retrieval và response template/rule.
+- `Full`: chậm hơn, dùng local Qwen model để sinh câu trả lời tự nhiên.
+
+Ví dụ câu hỏi:
+
+- `How do I merge two pandas dataframes on a common column?`
+- `How do I read a CSV file with pandas?`
+- `How do I split data into train and test sets with sklearn?`
+- `Cách đọc file CSV bằng pandas như thế nào?`
+
 ## Cài đặt
 
+Tạo môi trường Python:
+
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Trên Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
 ## Khởi động database
+
+Repo dùng PostgreSQL kèm pgvector trong Docker:
 
 ```bash
 cd docker
@@ -36,138 +112,178 @@ docker compose up -d
 cd ..
 ```
 
-Schema nằm ở `src/database/schema.sql` và được mount vào container PostgreSQL.
+Thông tin mặc định:
 
-## Build dataset từ thư viện đã cài
+- Database: `rag_database`
+- User: `admin`
+- Password: `secretpassword`
+- Port: `5432`
 
-Baseline chính của project lấy data trực tiếp từ docstring của các Python
-library đã cài. Cách này rẻ, sạch, reproducible và hợp với bài toán hỏi đáp về
-function trong library.
+Schema nằm ở:
 
-Nếu muốn tải riêng các package làm nguồn data trước:
+- `src/database/schema.sql`
 
-```bash
-bash scripts/download_data_libs.sh
-```
+## Build dataset
 
-Lệnh này chỉ tải wheel/source vào `data/package_cache/`, chưa cài vào môi
-trường Python. Để cài trực tiếp:
+Dataset được build từ docstring của các thư viện Python đã cài.
+
+Cài các thư viện nguồn data:
 
 ```bash
 pip install -r requirements-data-libs.txt
 ```
 
+Build chunks và training data:
+
 ```bash
-PYTHONPATH=src python3 src/data_pipeline/dataset_builder.py
+PYTHONPATH=src python src/data_pipeline/dataset_builder.py
 ```
 
-Lệnh này introspect các library mục tiêu, tạo function chunks và sinh vài query
-rule-based cho mỗi function.
-
-Output:
+Output chính:
 
 - `data/chunks/functions.jsonl`
+- `data/parsed/function_docs.jsonl`
 - `data/training/retriever_train.jsonl`
 - `data/training/retriever_test.jsonl`
-- `data/benchmark/benchmark_queries.jsonl`
 
-Nếu muốn nhiều query rule-based hơn cho mỗi function:
-
-```bash
-PYTHONPATH=src python3 src/data_pipeline/dataset_builder.py --examples-per-function 4
-```
-
-## Build thêm từ raw docs
-
-Raw PDF/HTML/DOCX chỉ là nguồn phụ trợ khi cần mở rộng data từ official docs.
-Đặt tài liệu library vào dạng:
-
-```text
-data/raw/
-  pandas/
-    api.html
-    user_guide.pdf
-  numpy/
-    reference.docx
-```
-
-Parser hiện hỗ trợ `.pdf`, `.html`, `.htm`, `.docx`, `.md`, `.rst`, `.txt`.
+Ingest vào PostgreSQL:
 
 ```bash
-PYTHONPATH=src python3 src/data_pipeline/dataset_builder.py --use-raw-docs
+PYTHONPATH=src python src/data_pipeline/dataset_builder.py --ingest
 ```
 
-Để build embedding và nạp vào PostgreSQL:
+Trên Windows PowerShell:
 
-```bash
-PYTHONPATH=src python3 src/data_pipeline/dataset_builder.py --ingest
+```powershell
+$env:PYTHONPATH='src'
+python src\data_pipeline\dataset_builder.py --ingest
 ```
 
-Embedding mặc định dùng `BAAI/bge-small-en-v1.5` nên schema đang để
-`embedding vector(384)`. Nếu đổi embedding model khác, sửa dimension trong
-`src/database/schema.sql`.
+## Model GGUF
 
-## Sinh training data bằng GPT-4o
-
-Script này đọc `data/chunks/functions.jsonl`, gọi OpenAI API, và sinh query,
-answer, train/test/benchmark bằng Structured Outputs.
-
-```bash
-export OPENAI_API_KEY=...
-PYTHONPATH=src python3 src/data_pipeline/llm_data_generator.py \
-  --functions data/chunks/functions.jsonl \
-  --model gpt-4o \
-  --limit 200 \
-  --examples-per-function 3
-```
-
-Output:
-
-- `data/training/llm_retriever_train.jsonl`
-- `data/training/llm_retriever_test.jsonl`
-- `data/benchmark/llm_benchmark.jsonl`
-
-Nạp dataset examples vào database:
-
-```bash
-PYTHONPATH=src python3 src/data_pipeline/dataset_builder.py \
-  --ingest-datasets \
-  --dataset-files data/training/llm_retriever_train.jsonl data/training/llm_retriever_test.jsonl data/benchmark/llm_benchmark.jsonl
-```
-
-## Chạy demo RAG
-
-Đặt file GGUF vào:
+Đặt model local vào:
 
 - `models/final_gguf/qwen3-0.6b-instruct-q4_k_m.gguf`
 - `models/final_gguf/qwen3-4b-instruct-q4_k_m.gguf`
 
-Hoặc override bằng env vars:
+Các file `.gguf` không được commit lên GitHub vì dung lượng lớn. Có thể override path bằng biến môi trường:
 
 ```bash
 export PARSER_MODEL_PATH=/path/to/parser.gguf
 export GENERATOR_MODEL_PATH=/path/to/qwen3-4b.gguf
 ```
 
-Sau đó chạy:
+Windows PowerShell:
+
+```powershell
+$env:PARSER_MODEL_PATH='D:\path\to\parser.gguf'
+$env:GENERATOR_MODEL_PATH='D:\path\to\qwen3-4b.gguf'
+```
+
+## Chạy API và web local
 
 ```bash
-PYTHONPATH=src python3 src/api/main.py
+PYTHONPATH=src uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH='src'
+uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+Mở trình duyệt:
+
+- Web chat: `http://127.0.0.1:8000/`
+- API docs: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+
+## Public demo bằng Cloudflare Tunnel
+
+Cách nhanh để máy khác truy cập được web đang chạy local:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Cloudflare sẽ trả về URL dạng:
+
+```text
+https://something.trycloudflare.com
+```
+
+Gửi URL này cho người khác để demo. Đây là quick tunnel nên URL có thể thay đổi sau mỗi lần chạy lại.
+
+## API
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Ask endpoint:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"query":"How do I read a CSV file with pandas?","mode":"fast"}'
+```
+
+Request body:
+
+```json
+{
+  "query": "How do I read a CSV file with pandas?",
+  "mode": "fast"
+}
+```
+
+`mode` nhận một trong hai giá trị:
+
+- `fast`
+- `full`
+
+Response gồm:
+
+- `query`: câu hỏi gốc.
+- `optimized_query`: câu query sau rewrite.
+- `filters`: filter được áp dụng, ví dụ `library_name`.
+- `answer`: câu trả lời.
+- `sources`: danh sách chunks được dùng làm nguồn.
+
+## Ghi chú hiệu năng
+
+- Request đầu tiên sau khi restart có thể chậm vì phải load embedding model/reranker/LLM.
+- Các request sau thường nhanh hơn.
+- Fast mode phù hợp demo vì không cần sinh bằng model lớn.
+- Full mode trả lời tự nhiên hơn nhưng chậm hơn vì dùng local Qwen.
 
 ## Fine-tune retriever
 
-Dataset mặc định là `data/training/retriever_train.jsonl`, được sinh từ
-docstring các thư viện.
+Training data mặc định nằm ở:
 
-```json
-{"query": "How do I join two dataframes?", "positive": "pandas.merge documentation text..."}
-```
+- `data/training/retriever_train.jsonl`
+- `data/training/retriever_test.jsonl`
 
-Chạy:
+Chạy fine-tune:
 
 ```bash
-PYTHONPATH=src python3 src/fine_tuning/train_retriver.py
+PYTHONPATH=src python src/fine_tuning/train_retriver.py
 ```
 
-Model output mặc định: `models/checkpoints/bge-small-code-assistant`.
+Model output mặc định:
+
+- `models/checkpoints/bge-small-code-assistant`
+
+## Các file quan trọng
+
+- `src/api/main.py`: FastAPI app, schema request, endpoint `/ask`.
+- `src/api/chat_ui.html`: giao diện web chat.
+- `src/pipeline/rag_orchestrator.py`: điều phối RAG pipeline.
+- `src/pipeline/query_processor.py`: rewrite query và filter.
+- `src/pipeline/prompt_builder.py`: build prompt/context cho LLM.
+- `src/database/hybrid_search.py`: hybrid search PostgreSQL/pgvector.
+- `src/models/llm.py`: local Qwen GGUF wrapper.
+- `src/core/schemas.py`: schema dữ liệu request/response/chunk.
