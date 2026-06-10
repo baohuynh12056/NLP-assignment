@@ -187,6 +187,17 @@
       gap: 10px;
     }
     .answer p { margin: 0; }
+    .inline-code {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: #ecfdf5;
+      color: #0f766e;
+      border: 1px solid #bbf7d0;
+      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      vertical-align: baseline;
+    }
     .code-block {
       overflow: hidden;
       border-radius: 8px;
@@ -560,9 +571,24 @@
           const cleaned = paragraph.trim();
           if (!cleaned) return;
           const p = document.createElement("p");
-          p.textContent = cleaned;
+          renderInlineText(p, cleaned);
           bubble.appendChild(p);
         });
+      });
+    }
+
+    function renderInlineText(parent, text) {
+      const fragments = String(text || "").split(/(`[^`]+`)/g);
+      fragments.forEach((fragment) => {
+        if (!fragment) return;
+        if (fragment.startsWith("`") && fragment.endsWith("`") && fragment.length > 2) {
+          const code = document.createElement("code");
+          code.className = "inline-code";
+          code.textContent = fragment.slice(1, -1);
+          parent.appendChild(code);
+          return;
+        }
+        parent.appendChild(document.createTextNode(fragment));
       });
     }
 
