@@ -10,3 +10,4 @@ lxml
 python-docx
 openai
 tqdm
+uvicorn

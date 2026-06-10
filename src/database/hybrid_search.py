@@ -13,6 +13,8 @@ class PostgreSQLHybridSearch:
     def __init__(self, db_config: Dict[str, Any]):
         self.db_config = db_config
         self.conn = psycopg2.connect(**self.db_config)
+        with self.conn.cursor() as cur:
+            cur.execute("SET ivfflat.probes = 100")
 
     def search(
         self,

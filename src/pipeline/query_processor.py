@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional
+import unicodedata
 
 from core.base_llm import BaseLLM
 from core.schemas import ParsedQuery
@@ -45,11 +46,19 @@ class QueryProcessor:
         """
         logger.info(f"Processing raw query: '{raw_query}'")
 
-        # Step 1: Let the Mini-LLM do the heavy lifting (Extraction & Rewriting)
-        parsed_result: ParsedQuery = self.llm.parse_query(raw_query)
+        parsed_result = self._rule_based_parse(raw_query)
+        if parsed_result is None:
+            # Step 1: Let the Mini-LLM handle only queries that rules cannot parse.
+            parsed_result = self.llm.parse_query(raw_query)
+
+        parsed_result.optimized_query = self._fallback_rewrite(raw_query, parsed_result.optimized_query)
         
         # Step 2: Validate the extracted metadata (Safety Layer)
         validated_filters = {}
+        if "library_name" not in parsed_result.filters:
+            inferred_library = self._infer_library(raw_query)
+            if inferred_library:
+                parsed_result.filters["library_name"] = inferred_library
         
         if "library_name" in parsed_result.filters:
             extracted_lib = str(parsed_result.filters["library_name"]).strip().lower()
@@ -77,3 +86,59 @@ class QueryProcessor:
 
         logger.info(f"Final Optimized Query: '{parsed_result.optimized_query}'")
         return parsed_result
+
+    def _rule_based_parse(self, raw_query: str) -> Optional[ParsedQuery]:
+        inferred_library = self._infer_library(raw_query)
+        optimized_query = self._fallback_rewrite(raw_query, raw_query)
+
+        if optimized_query != raw_query:
+            return ParsedQuery(
+                optimized_query=optimized_query,
+                filters={"library_name": inferred_library} if inferred_library else {},
+            )
+
+        normalized = self._normalize_text(raw_query)
+        if inferred_library and any(term in normalized for term in ["merge", "join", "concat", "dataframe"]):
+            return ParsedQuery(
+                optimized_query=raw_query,
+                filters={"library_name": inferred_library},
+            )
+
+        return None
+
+    def _infer_library(self, raw_query: str) -> Optional[str]:
+        normalized = self._normalize_text(raw_query)
+        for library_name in self.supported_libraries:
+            if library_name in normalized:
+                return library_name
+        return None
+
+    def _fallback_rewrite(self, raw_query: str, optimized_query: str) -> str:
+        normalized = self._normalize_text(raw_query)
+        if (
+            "dataframe" in normalized
+            and ("cot chung" in normalized or "common column" in normalized)
+            and ("ket hop" in normalized or "join" in normalized or "merge" in normalized)
+            and "pandas" in normalized
+        ):
+            return "merge two pandas DataFrames on a common column using pandas.merge"
+        if (
+            "pandas" in normalized
+            and "csv" in normalized
+            and any(term in normalized for term in ["read", "load", "doc"])
+        ):
+            return "read a CSV file using pandas.read_csv"
+        if (
+            ("sklearn" in normalized or "scikit" in normalized)
+            and "train" in normalized
+            and "test" in normalized
+            and any(term in normalized for term in ["split", "chia", "tach"])
+        ):
+            return "split data into train and test sets using sklearn.model_selection.train_test_split"
+        return optimized_query
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        text = unicodedata.normalize("NFKD", text or "")
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return text.lower()

@@ -1,4 +1,5 @@
 import json
+import re
 from typing import List
 from llama_cpp import Llama
 
@@ -86,13 +87,16 @@ class QwenLocalLLM(BaseLLM):
         print(f"[QwenLocalLLM] Generating answer using {len(context_chunks)} chunks...")
         
         system_prompt = (
-            "You are a helpful and expert Python programming assistant. "
-            "Answer the user's question using ONLY the provided context. "
-            "Explain the parameters and provide a short code example if applicable. "
-            "If the context does not contain the answer, say 'I cannot find the exact answer in the documentation.'"
+            "You are a concise Python documentation assistant for students and developers. "
+            "Use ONLY the retrieved documentation in the user message. "
+            "Answer in the detected user language specified in the user message. "
+            "Prefer a practical answer over a long explanation: name the API, show one short code example, "
+            "then explain the key parameters or caveats that matter for the question. "
+            "Do not invent arguments, defaults, or behavior not present in the retrieved documentation. "
+            "If the context is weak or unrelated, say that the exact answer was not found in the documentation."
         )
         
-        user_message = PromptBuilder.build_user_message(query, context_chunks)
+        user_message = PromptBuilder.build_user_message(query, context_chunks) + "\n/no_think"
         
         prompt = (
             f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
@@ -108,4 +112,8 @@ class QwenLocalLLM(BaseLLM):
             stop=["<|im_end|>"]
         )
         
-        return response["choices"][0]["text"].strip()
+        return self._strip_thinking(response["choices"][0]["text"].strip())
+
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
