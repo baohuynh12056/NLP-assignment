@@ -1,0 +1,26 @@
+# configs/models.yaml
+
+parser:
+  type: "llama_cpp"
+  model_path: "models/final_gguf/qwen3-0.6b-instruct-q4_k_m.gguf"
+  context_window: 512
+  gpu_layers: -1
+  temperature: 0.0
+  max_tokens: 150
+  chat_format: "chatml"
+
+generator:
+  type: "llama_cpp"
+  model_path: "models/final_gguf/qwen3-4b-instruct-q4_k_m.gguf"
+  context_window: 4096
+  gpu_layers: -1
+  temperature: 0.3
+  max_tokens: 1024
+  chat_format: "chatml"
+
+reranker:
+  type: "cross_encoder"
+  model_path: "BAAI/bge-reranker-base"
+  max_length: 512
+  device: null
+  top_k: 5

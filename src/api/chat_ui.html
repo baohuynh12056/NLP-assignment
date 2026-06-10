@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -27,7 +27,6 @@
       font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
     }
     button, textarea, input { font: inherit; }
-    button { -webkit-tap-highlight-color: transparent; }
     .app {
       height: 100vh;
       height: 100dvh;
@@ -52,7 +51,6 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      min-width: 0;
       font-weight: 750;
     }
     .brand-mark {
@@ -64,7 +62,6 @@
       display: grid;
       place-items: center;
       font-size: 13px;
-      letter-spacing: 0;
     }
     .icon-btn {
       width: 38px;
@@ -78,7 +75,6 @@
       place-items: center;
       font-size: 18px;
     }
-    .icon-btn:hover { border-color: #b8c0cc; background: var(--panel-2); }
     .chat {
       overflow: auto;
       padding: 24px 16px 28px;
@@ -167,7 +163,6 @@
       cursor: pointer;
       font-size: 13px;
     }
-    .quick:hover { border-color: var(--accent); color: var(--accent); }
     .typing {
       display: inline-flex;
       gap: 4px;
@@ -192,41 +187,78 @@
       gap: 10px;
     }
     .answer p { margin: 0; }
+    .inline-code {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: #e7f5ff;
+      color: #0954a5;
+      border: 1px solid #b8dcff;
+      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      vertical-align: baseline;
+    }
     .code-block {
       overflow: hidden;
       border-radius: 8px;
-      background: var(--code-bg);
-      border: 1px solid #1f2937;
+      background: #1e1e1e;
+      border: 1px solid #3c3c3c;
+      box-shadow: 0 8px 22px rgba(17, 24, 39, 0.18);
     }
     .code-head {
       height: 34px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 10px;
-      color: #cbd5e1;
-      background: #0b1220;
+      padding: 0 9px 0 12px;
+      color: #cccccc;
+      background: #252526;
+      border-bottom: 1px solid #3c3c3c;
       font-size: 12px;
     }
+    .code-head span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .code-head span::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4ec9b0;
+      box-shadow: 14px 0 #dcdcaa, 28px 0 #f48771;
+      margin-right: 28px;
+    }
     .copy {
-      border: 1px solid #334155;
+      border: 1px solid #3c3c3c;
       border-radius: 7px;
-      background: #111827;
-      color: #e5e7eb;
+      background: #2d2d30;
+      color: #cccccc;
       cursor: pointer;
       height: 24px;
       padding: 0 8px;
       font-size: 12px;
     }
+    .copy:hover {
+      background: #37373d;
+      color: #ffffff;
+    }
     pre {
       margin: 0;
-      padding: 13px;
+      padding: 14px 15px;
       overflow: auto;
-      color: var(--code-ink);
+      color: #d4d4d4;
       font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       white-space: pre;
+      tab-size: 4;
     }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .tok-keyword { color: #569cd6; }
+    .tok-string { color: #ce9178; }
+    .tok-comment { color: #6a9955; }
+    .tok-number { color: #b5cea8; }
+    .tok-call { color: #dcdcaa; }
+    .tok-builtin { color: #4ec9b0; }
     .composer-wrap {
       padding: 12px 16px 16px;
       background: linear-gradient(to top, var(--bg) 82%, rgba(246, 247, 249, 0));
@@ -276,7 +308,6 @@
       font-size: 19px;
       font-weight: 900;
     }
-    .send:hover { background: #0d665f; }
     .send:disabled { opacity: .55; cursor: wait; }
     .drawer-backdrop {
       position: fixed;
@@ -344,12 +375,6 @@
       background: #ecfdf5;
       color: var(--accent);
     }
-    .drawer-link {
-      color: var(--accent-2);
-      font-weight: 700;
-      text-decoration: none;
-      font-size: 13px;
-    }
     .hint {
       color: var(--muted);
       font-size: 12px;
@@ -392,7 +417,6 @@
       .topbar { padding: 0 10px; }
       .brand-mark { display: none; }
       .chat { padding: 16px 10px 18px; }
-      .messages { gap: 14px; }
       .message, .message.user {
         grid-template-columns: 1fr;
         max-width: 100%;
@@ -400,7 +424,6 @@
       .avatar, .user .avatar { display: none; }
       .user .content { grid-column: 1; justify-items: stretch; }
       .composer-wrap { padding: 10px; }
-      .bubble { padding: 12px 13px; }
     }
   </style>
 </head>
@@ -412,7 +435,7 @@
         <span class="brand-mark">AI</span>
         <span>Code Assistant</span>
       </div>
-      <button class="icon-btn" id="settings-button" title="Settings and sources" type="button">&#9881;</button>
+      <button class="icon-btn" id="settings-button" title="Settings and sources" type="button">...</button>
     </header>
 
     <main class="chat" id="chat">
@@ -424,7 +447,7 @@
             <div class="bubble">
               <p>Ask about Python library functions and I will answer with the best matching docs.</p>
               <div class="quick-row">
-                <button class="quick" type="button" data-query="How do I merge two pandas dataframes on a common column?">pandas merge</button>
+                <button class="quick" type="button" data-query="How do I merge two pandas DataFrames on a common column?">pandas merge</button>
                 <button class="quick" type="button" data-query="How do I read a CSV file with pandas?">read CSV</button>
                 <button class="quick" type="button" data-query="How do I split data into train and test sets with sklearn?">train/test split</button>
               </div>
@@ -439,7 +462,7 @@
         <div class="status" id="meta"></div>
         <form class="composer" id="ask-form">
           <textarea id="query" placeholder="Ask a question..." rows="1" required></textarea>
-          <button class="send" id="send" type="submit" title="Send">&#8593;</button>
+          <button class="send" id="send" type="submit" title="Send">^</button>
         </form>
       </div>
     </footer>
@@ -449,15 +472,15 @@
   <aside class="drawer" id="drawer">
     <div class="drawer-head">
       <h2>Settings</h2>
-      <button class="icon-btn" id="close-drawer" title="Close" type="button">&#215;</button>
+      <button class="icon-btn" id="close-drawer" title="Close" type="button">x</button>
     </div>
     <div class="settings">
       <div class="mode" aria-label="Answer mode">
         <label><input type="radio" name="mode" value="fast" checked />Fast</label>
         <label><input type="radio" name="mode" value="full" />Full</label>
       </div>
-      <div class="hint">Fast uses retrieval. Full uses the local Qwen model.</div>
-      <a class="drawer-link" href="/docs" target="_blank" rel="noreferrer">API docs</a>
+      <div class="hint">Fast uses retrieval. Full uses the configured generator model.</div>
+      <a href="/docs" target="_blank" rel="noreferrer">API docs</a>
     </div>
     <div class="sources" id="sources">
       <div class="hint">Sources will appear here after the first answer.</div>
@@ -564,7 +587,7 @@
           });
           const pre = document.createElement("pre");
           const codeEl = document.createElement("code");
-          codeEl.textContent = code.trim();
+          codeEl.innerHTML = highlightCode(code.trim());
           pre.appendChild(codeEl);
           head.append(lang, copy);
           block.append(head, pre);
@@ -575,9 +598,47 @@
           const cleaned = paragraph.trim();
           if (!cleaned) return;
           const p = document.createElement("p");
-          p.textContent = cleaned;
+          renderInlineText(p, cleaned);
           bubble.appendChild(p);
         });
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function highlightCode(code) {
+      const escaped = escapeHtml(code);
+      const tokenPattern = /(#.*$)|(&quot;[^&]*(?:&[^q][^&]*)*&quot;|&#39;[^&]*(?:&[^#][^&]*)*&#39;)|\b(\d+(?:\.\d+)?)\b|\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b|\b(print|len|range|list|dict|set|tuple|str|int|float|bool|sum|min|max|enumerate|zip)\b|\b([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()/gm;
+      return escaped.replace(tokenPattern, (match, comment, string, number, keyword, builtin, call) => {
+        if (comment) return `<span class="tok-comment">${comment}</span>`;
+        if (string) return `<span class="tok-string">${string}</span>`;
+        if (number) return `<span class="tok-number">${number}</span>`;
+        if (keyword) return `<span class="tok-keyword">${keyword}</span>`;
+        if (builtin) return `<span class="tok-builtin">${builtin}</span>`;
+        if (call) return `<span class="tok-call">${call}</span>`;
+        return match;
+      });
+    }
+
+    function renderInlineText(parent, text) {
+      const fragments = String(text || "").split(/(`[^`]+`)/g);
+      fragments.forEach((fragment) => {
+        if (!fragment) return;
+        if (fragment.startsWith("`") && fragment.endsWith("`") && fragment.length > 2) {
+          const code = document.createElement("code");
+          code.className = "inline-code";
+          code.textContent = fragment.slice(1, -1);
+          parent.appendChild(code);
+          return;
+        }
+        parent.appendChild(document.createTextNode(fragment));
       });
     }
 

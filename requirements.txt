@@ -1,13 +1,9 @@
 torch
 sentence-transformers
 llama-cpp-python
-pydantic
 psycopg2-binary
-numpy
-pypdf
-beautifulsoup4
-lxml
-python-docx
-openai
-tqdm
+fastapi
 uvicorn
+pydantic
+pyyaml
+faiss-cpu
