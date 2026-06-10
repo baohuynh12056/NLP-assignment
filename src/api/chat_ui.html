@@ -191,9 +191,9 @@
       display: inline-block;
       padding: 1px 6px;
       border-radius: 6px;
-      background: #ecfdf5;
-      color: #0f766e;
-      border: 1px solid #bbf7d0;
+      background: #e7f5ff;
+      color: #0954a5;
+      border: 1px solid #b8dcff;
       font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-weight: 700;
       vertical-align: baseline;
@@ -201,37 +201,64 @@
     .code-block {
       overflow: hidden;
       border-radius: 8px;
-      background: var(--code-bg);
-      border: 1px solid #1f2937;
+      background: #1e1e1e;
+      border: 1px solid #3c3c3c;
+      box-shadow: 0 8px 22px rgba(17, 24, 39, 0.18);
     }
     .code-head {
       height: 34px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 10px;
-      color: #cbd5e1;
-      background: #0b1220;
+      padding: 0 9px 0 12px;
+      color: #cccccc;
+      background: #252526;
+      border-bottom: 1px solid #3c3c3c;
       font-size: 12px;
     }
+    .code-head span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .code-head span::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4ec9b0;
+      box-shadow: 14px 0 #dcdcaa, 28px 0 #f48771;
+      margin-right: 28px;
+    }
     .copy {
-      border: 1px solid #334155;
+      border: 1px solid #3c3c3c;
       border-radius: 7px;
-      background: #111827;
-      color: #e5e7eb;
+      background: #2d2d30;
+      color: #cccccc;
       cursor: pointer;
       height: 24px;
       padding: 0 8px;
       font-size: 12px;
     }
+    .copy:hover {
+      background: #37373d;
+      color: #ffffff;
+    }
     pre {
       margin: 0;
-      padding: 13px;
+      padding: 14px 15px;
       overflow: auto;
-      color: var(--code-ink);
+      color: #d4d4d4;
       font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       white-space: pre;
+      tab-size: 4;
     }
+    .tok-keyword { color: #569cd6; }
+    .tok-string { color: #ce9178; }
+    .tok-comment { color: #6a9955; }
+    .tok-number { color: #b5cea8; }
+    .tok-call { color: #dcdcaa; }
+    .tok-builtin { color: #4ec9b0; }
     .composer-wrap {
       padding: 12px 16px 16px;
       background: linear-gradient(to top, var(--bg) 82%, rgba(246, 247, 249, 0));
@@ -560,7 +587,7 @@
           });
           const pre = document.createElement("pre");
           const codeEl = document.createElement("code");
-          codeEl.textContent = code.trim();
+          codeEl.innerHTML = highlightCode(code.trim());
           pre.appendChild(codeEl);
           head.append(lang, copy);
           block.append(head, pre);
@@ -574,6 +601,29 @@
           renderInlineText(p, cleaned);
           bubble.appendChild(p);
         });
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function highlightCode(code) {
+      const escaped = escapeHtml(code);
+      const tokenPattern = /(#.*$)|(&quot;[^&]*(?:&[^q][^&]*)*&quot;|&#39;[^&]*(?:&[^#][^&]*)*&#39;)|\b(\d+(?:\.\d+)?)\b|\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b|\b(print|len|range|list|dict|set|tuple|str|int|float|bool|sum|min|max|enumerate|zip)\b|\b([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()/gm;
+      return escaped.replace(tokenPattern, (match, comment, string, number, keyword, builtin, call) => {
+        if (comment) return `<span class="tok-comment">${comment}</span>`;
+        if (string) return `<span class="tok-string">${string}</span>`;
+        if (number) return `<span class="tok-number">${number}</span>`;
+        if (keyword) return `<span class="tok-keyword">${keyword}</span>`;
+        if (builtin) return `<span class="tok-builtin">${builtin}</span>`;
+        if (call) return `<span class="tok-call">${call}</span>`;
+        return match;
       });
     }
 
