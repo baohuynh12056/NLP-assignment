@@ -201,6 +201,16 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Runtime/demo artifacts
+data/package_cache/
+api_server.log
+api_server.err
+api_server.pid
+cloudflared.log
+cloudflared.err
+cloudflared.pid
+models/**/*.gguf
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
+
+from pydantic import BaseModel, Field
+
 
 class Chunk(BaseModel):
     """
@@ -18,3 +20,20 @@ class ParsedQuery(BaseModel):
     """
     optimized_query: str
     filters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SourceChunk(BaseModel):
+    id: str
+    function_name: str
+    library_name: str
+    score: Optional[float] = None
+    snippet: str = ""
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RAGResponse(BaseModel):
+    query: str
+    optimized_query: str
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    answer: str
+    sources: List[SourceChunk] = Field(default_factory=list)

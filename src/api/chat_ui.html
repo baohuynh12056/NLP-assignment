@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Code Assistant</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-2: #f9fafb;
+      --ink: #111827;
+      --muted: #667085;
+      --line: #d9dee7;
+      --accent: #0f766e;
+      --accent-2: #2563eb;
+      --danger: #b42318;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    button, textarea, input { font: inherit; }
+    .app {
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 56px 1fr auto;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      align-items: center;
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+    .brand {
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+    }
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
+    .chat {
+      overflow: auto;
+      padding: 24px 16px 28px;
+      scroll-behavior: smooth;
+    }
+    .messages {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+    .message {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+    .message.user {
+      grid-template-columns: minmax(0, 1fr) 34px;
+      max-width: 760px;
+      justify-self: end;
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: #eef2ff;
+      color: #3730a3;
+      font-weight: 800;
+      font-size: 12px;
+    }
+    .user .avatar {
+      grid-column: 2;
+      background: #ecfdf5;
+      color: var(--accent);
+    }
+    .content {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .user .content {
+      grid-column: 1;
+      grid-row: 1;
+      justify-items: end;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 2px;
+    }
+    .bubble {
+      max-width: 100%;
+      padding: 13px 15px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .user .bubble {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      border-bottom-right-radius: 5px;
+    }
+    .bot .bubble { border-bottom-left-radius: 5px; }
+    .welcome .bubble {
+      display: grid;
+      gap: 12px;
+    }
+    .quick-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .quick {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: #344054;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .typing {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      color: var(--muted);
+    }
+    .typing span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.1s infinite ease-in-out;
+    }
+    .typing span:nth-child(2) { animation-delay: 120ms; }
+    .typing span:nth-child(3) { animation-delay: 240ms; }
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: .32; transform: translateY(0); }
+      40% { opacity: 1; transform: translateY(-3px); }
+    }
+    .answer {
+      display: grid;
+      gap: 10px;
+    }
+    .answer p { margin: 0; }
+    .code-block {
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--code-bg);
+      border: 1px solid #1f2937;
+    }
+    .code-head {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      color: #cbd5e1;
+      background: #0b1220;
+      font-size: 12px;
+    }
+    .copy {
+      border: 1px solid #334155;
+      border-radius: 7px;
+      background: #111827;
+      color: #e5e7eb;
+      cursor: pointer;
+      height: 24px;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+    pre {
+      margin: 0;
+      padding: 13px;
+      overflow: auto;
+      color: var(--code-ink);
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
+    .composer-wrap {
+      padding: 12px 16px 16px;
+      background: linear-gradient(to top, var(--bg) 82%, rgba(246, 247, 249, 0));
+    }
+    .composer-shell {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      gap: 8px;
+    }
+    .status {
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 18px;
+      padding: 0 2px;
+    }
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+      background: var(--panel);
+      border: 1px solid #cfd6df;
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 10px 28px rgba(16, 24, 40, 0.09);
+    }
+    textarea {
+      width: 100%;
+      min-height: 44px;
+      max-height: 160px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--ink);
+    }
+    .send {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      font-size: 19px;
+      font-weight: 900;
+    }
+    .send:disabled { opacity: .55; cursor: wait; }
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, .24);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+      z-index: 9;
+    }
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(390px, 94vw);
+      height: 100vh;
+      height: 100dvh;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      box-shadow: -24px 0 48px rgba(16, 24, 40, 0.16);
+      transform: translateX(100%);
+      transition: transform 180ms ease;
+      z-index: 10;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-head {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .drawer h2 { margin: 0; font-size: 15px; }
+    .settings {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mode label {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .mode input { position: absolute; opacity: 0; pointer-events: none; }
+    .mode label:has(input:checked) {
+      background: #ecfdf5;
+      color: var(--accent);
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .sources {
+      overflow: auto;
+      padding: 14px 16px 22px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+    .source {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel-2);
+    }
+    .source strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+    .source small {
+      color: var(--muted);
+      display: block;
+      margin-bottom: 7px;
+    }
+    .source p {
+      margin: 0;
+      color: #475467;
+      font-size: 12px;
+    }
+    .error .bubble {
+      color: var(--danger);
+      border-color: #fda29b;
+      background: #fff7f5;
+    }
+    @media (max-width: 640px) {
+      .app { grid-template-rows: 52px 1fr auto; }
+      .topbar { padding: 0 10px; }
+      .brand-mark { display: none; }
+      .chat { padding: 16px 10px 18px; }
+      .message, .message.user {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+      }
+      .avatar, .user .avatar { display: none; }
+      .user .content { grid-column: 1; justify-items: stretch; }
+      .composer-wrap { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <span></span>
+      <div class="brand">
+        <span class="brand-mark">AI</span>
+        <span>Code Assistant</span>
+      </div>
+      <button class="icon-btn" id="settings-button" title="Settings and sources" type="button">...</button>
+    </header>
+
+    <main class="chat" id="chat">
+      <div class="messages" id="messages">
+        <div class="message bot welcome">
+          <div class="avatar">AI</div>
+          <div class="content">
+            <div class="label">Assistant</div>
+            <div class="bubble">
+              <p>Ask about Python library functions and I will answer with the best matching docs.</p>
+              <div class="quick-row">
+                <button class="quick" type="button" data-query="How do I merge two pandas DataFrames on a common column?">pandas merge</button>
+                <button class="quick" type="button" data-query="How do I read a CSV file with pandas?">read CSV</button>
+                <button class="quick" type="button" data-query="How do I split data into train and test sets with sklearn?">train/test split</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="composer-wrap">
+      <div class="composer-shell">
+        <div class="status" id="meta"></div>
+        <form class="composer" id="ask-form">
+          <textarea id="query" placeholder="Ask a question..." rows="1" required></textarea>
+          <button class="send" id="send" type="submit" title="Send">^</button>
+        </form>
+      </div>
+    </footer>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head">
+      <h2>Settings</h2>
+      <button class="icon-btn" id="close-drawer" title="Close" type="button">x</button>
+    </div>
+    <div class="settings">
+      <div class="mode" aria-label="Answer mode">
+        <label><input type="radio" name="mode" value="fast" checked />Fast</label>
+        <label><input type="radio" name="mode" value="full" />Full</label>
+      </div>
+      <div class="hint">Fast uses retrieval. Full uses the configured generator model.</div>
+      <a href="/docs" target="_blank" rel="noreferrer">API docs</a>
+    </div>
+    <div class="sources" id="sources">
+      <div class="hint">Sources will appear here after the first answer.</div>
+    </div>
+  </aside>
+
+  <script>
+    const form = document.getElementById("ask-form");
+    const queryEl = document.getElementById("query");
+    const sendEl = document.getElementById("send");
+    const messagesEl = document.getElementById("messages");
+    const chatEl = document.getElementById("chat");
+    const metaEl = document.getElementById("meta");
+    const drawerEl = document.getElementById("drawer");
+    const backdropEl = document.getElementById("drawer-backdrop");
+    const sourcesEl = document.getElementById("sources");
+
+    function openDrawer() {
+      drawerEl.classList.add("open");
+      backdropEl.classList.add("open");
+    }
+    function closeDrawer() {
+      drawerEl.classList.remove("open");
+      backdropEl.classList.remove("open");
+    }
+    document.getElementById("settings-button").addEventListener("click", openDrawer);
+    document.getElementById("close-drawer").addEventListener("click", closeDrawer);
+    backdropEl.addEventListener("click", closeDrawer);
+
+    function autosize() {
+      queryEl.style.height = "auto";
+      queryEl.style.height = Math.min(queryEl.scrollHeight, 160) + "px";
+    }
+    queryEl.addEventListener("input", autosize);
+    queryEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    document.querySelectorAll(".quick").forEach((button) => {
+      button.addEventListener("click", () => {
+        queryEl.value = button.dataset.query;
+        autosize();
+        form.requestSubmit();
+      });
+    });
+
+    function scrollToBottom() {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function addMessage(role, text = "", className = "") {
+      const isUser = role === "You";
+      const message = document.createElement("div");
+      message.className = `message ${isUser ? "user" : "bot"} ${className}`;
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = isUser ? "YOU" : "AI";
+      const content = document.createElement("div");
+      content.className = "content";
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = role;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      if (text) bubble.textContent = text;
+      content.append(label, bubble);
+      message.append(avatar, content);
+      messagesEl.appendChild(message);
+      scrollToBottom();
+      return bubble;
+    }
+
+    function setLoading(bubble) {
+      bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+      metaEl.textContent = "Retrieving documentation...";
+    }
+
+    function renderAnswer(bubble, text) {
+      bubble.textContent = "";
+      bubble.classList.add("answer");
+      const parts = String(text || "").split(/```/);
+      parts.forEach((part, index) => {
+        if (index % 2 === 1) {
+          const firstBreak = part.indexOf("\n");
+          const language = firstBreak > -1 ? part.slice(0, firstBreak).trim() : "";
+          const code = firstBreak > -1 ? part.slice(firstBreak + 1) : part;
+          const block = document.createElement("div");
+          block.className = "code-block";
+          const head = document.createElement("div");
+          head.className = "code-head";
+          const lang = document.createElement("span");
+          lang.textContent = language || "code";
+          const copy = document.createElement("button");
+          copy.className = "copy";
+          copy.type = "button";
+          copy.textContent = "Copy";
+          copy.addEventListener("click", async () => {
+            await navigator.clipboard.writeText(code.trim());
+            copy.textContent = "Copied";
+            setTimeout(() => copy.textContent = "Copy", 1200);
+          });
+          const pre = document.createElement("pre");
+          const codeEl = document.createElement("code");
+          codeEl.textContent = code.trim();
+          pre.appendChild(codeEl);
+          head.append(lang, copy);
+          block.append(head, pre);
+          bubble.appendChild(block);
+          return;
+        }
+        part.split(/\n{2,}/).forEach((paragraph) => {
+          const cleaned = paragraph.trim();
+          if (!cleaned) return;
+          const p = document.createElement("p");
+          p.textContent = cleaned;
+          bubble.appendChild(p);
+        });
+      });
+    }
+
+    function renderSources(sources) {
+      sourcesEl.innerHTML = "";
+      if (!sources.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "No sources returned.";
+        sourcesEl.appendChild(empty);
+        return;
+      }
+      for (const source of sources) {
+        const item = document.createElement("div");
+        item.className = "source";
+        const score = typeof source.score === "number" ? source.score.toFixed(3) : "n/a";
+        item.innerHTML = "<strong></strong><small></small><p></p>";
+        item.querySelector("strong").textContent = source.function_name;
+        item.querySelector("small").textContent = `${source.library_name} - score ${score}`;
+        item.querySelector("p").textContent = source.snippet || "";
+        sourcesEl.appendChild(item);
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const query = queryEl.value.trim();
+      const selectedMode = document.querySelector('input[name="mode"]:checked');
+      const mode = selectedMode ? selectedMode.value : "fast";
+      if (!query || sendEl.disabled) return;
+
+      addMessage("You", query);
+      queryEl.value = "";
+      autosize();
+      const botBubble = addMessage("Assistant");
+      setLoading(botBubble);
+      sendEl.disabled = true;
+      const start = performance.now();
+
+      try {
+        const response = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, mode }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Request failed");
+
+        renderAnswer(botBubble, data.answer);
+        renderSources(data.sources || []);
+        const seconds = ((performance.now() - start) / 1000).toFixed(1);
+        metaEl.textContent = `${mode.toUpperCase()} - ${seconds}s`;
+      } catch (error) {
+        botBubble.textContent = error.message;
+        botBubble.parentElement.parentElement.classList.add("error");
+        metaEl.textContent = "Request failed";
+      } finally {
+        sendEl.disabled = false;
+        scrollToBottom();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,28 +1,50 @@
+import argparse
+import sys
+from functools import lru_cache
+from pathlib import Path
+from threading import Lock
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+
+from core.llm.manager import LLMManager
+from core.reranker.factory import RerankerFactory
+from core.retriever.factory import RetrieverFactory
+from core.schemas import RAGResponse
+from models.answer_generator import AnswerGenerator
+from models.query_parser import QueryParser
+from models.reranker import DocumentReranker
+from models.retriever import DocumentRetriever
+from pipeline.rag_orchestrator import RAGOrchestrator
 from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
-# Import Core Managers & Factories
-from core.llm.manager import LLMManager
-from core.retriever.factory import RetrieverFactory
-from core.reranker.factory import RerankerFactory
 
-# Import Business Agents
-from models.query_parser import QueryParser
-from models.retriever import DocumentRetriever
-from models.reranker import DocumentReranker
-from models.answer_generator import AnswerGenerator
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
-# Import Pipeline Orchestrator
-from pipeline.rag_orchestrator import RAGOrchestrator
 
-logger = get_logger("main")
+logger = get_logger("api")
+INDEX_HTML_PATH = Path(__file__).with_name("chat_ui.html")
+_pipeline_lock = Lock()
+
+app = FastAPI(
+    title="Mini Code-Assistance RAG",
+    version="0.2.0",
+)
+
+
+class AskRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    mode: str = Field("fast", pattern="^(fast|full)$")
 
 
 def initialize_orchestrator() -> RAGOrchestrator:
-    """Initializes all models, agents, and the orchestrator."""
-    logger.info("Initializing System Components...")
+    """Initializes models, retrieval components, business agents, and orchestrator."""
+    logger.info("Initializing system components...")
 
-    # 1. Initialize Core Models (Hardware/AI layer)
     llm_manager = LLMManager()
     core_retriever = RetrieverFactory.create_retriever(
         GLOBAL_CONFIG.get("retriever", {})
@@ -31,38 +53,67 @@ def initialize_orchestrator() -> RAGOrchestrator:
         GLOBAL_CONFIG.get("models", {}).get("reranker", {})
     )
 
-    # 2. Initialize Business Agents (Logic layer)
-    query_parser = QueryParser(llm=llm_manager.parser_llm)
-    answer_generator = AnswerGenerator(llm=llm_manager.generator_llm)
-    retriever_agent = DocumentRetriever(retriever_model=core_retriever)
-    reranker_agent = DocumentReranker(reranker_model=core_reranker)
-
-    # 3. Inject Agents into Orchestrator
-    orchestrator = RAGOrchestrator(
-        query_parser=query_parser,
-        retriever=retriever_agent,
-        reranker=reranker_agent,
-        answer_generator=answer_generator,
+    return RAGOrchestrator(
+        query_parser=QueryParser(llm=llm_manager.parser_llm),
+        retriever=DocumentRetriever(retriever_model=core_retriever),
+        reranker=DocumentReranker(reranker_model=core_reranker),
+        answer_generator=AnswerGenerator(llm=llm_manager.generator_llm),
     )
 
-    logger.info("System Initialization Complete.")
-    return orchestrator
+
+@lru_cache(maxsize=1)
+def get_pipeline() -> RAGOrchestrator:
+    return initialize_orchestrator()
 
 
-def main():
-    # Setup and get the fully configured pipeline
-    pipeline = initialize_orchestrator()
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    if INDEX_HTML_PATH.exists():
+        return INDEX_HTML_PATH.read_text(encoding="utf-8")
+    return "<h1>Code Assistant</h1><p>Missing src/api/chat_ui.html</p>"
 
-    # Test the system
-    test_query = "Làm sao để gom nhóm dữ liệu theo một cột và tính giá trị trung bình trong thư viện pandas?"
 
-    # Run the pipeline
-    result = pipeline.run(test_query)
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
 
-    # Output the result
-    print("\n\n🤖 AI ASSISTANT ANSWER:\n")
-    print(result)
-    print("\n" + "=" * 50)
+
+@app.post("/ask", response_model=RAGResponse)
+def ask(request: AskRequest) -> RAGResponse:
+    try:
+        # llama.cpp model instances should not be driven concurrently in this demo.
+        with _pipeline_lock:
+            return get_pipeline().run_with_details(
+                request.query,
+                generate_answer=request.mode == "full",
+            )
+    except Exception as exc:
+        logger.exception("Failed to answer request")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def run_demo() -> None:
+    query = "How do I merge two pandas DataFrames on a common column?"
+    response = get_pipeline().run_with_details(query, generate_answer=False)
+    print("ANSWER:")
+    print(response.answer)
+    print("\nSOURCES:")
+    for source in response.sources:
+        print(f"- {source.function_name} score={source.score}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--demo", action="store_true", help="Run one terminal demo query.")
+    args = parser.parse_args()
+
+    if args.demo:
+        run_demo()
+        return
+
+    import uvicorn
+
+    uvicorn.run("api.main:app", host="127.0.0.1", port=8000, reload=False)
 
 
 if __name__ == "__main__":

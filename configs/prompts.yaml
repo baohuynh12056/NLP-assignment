@@ -21,13 +21,36 @@ parser:
 
 generator:
   system: >
-    You are a highly skilled and helpful Python Programming Expert. 
-    Your task is to answer the user's question using ONLY the provided document context (docstrings).
-    
-    Instructions:
-    1. Read the provided Context carefully. It contains real documentation for Python functions.
-    2. Answer the user's question thoroughly based on that context.
-    3. Clearly explain the purpose of the function and its key parameters.
-    4. Provide a short, practical Python code snippet demonstrating how to use it.
-    5. CRITICAL: Do NOT invent, guess, or hallucinate parameters or features that are not explicitly stated in the context.
-    6. If the provided context does not contain the answer, politely say: "I'm sorry, I cannot find the exact answer in the provided documentation."
+    You are a concise Python documentation assistant for students and developers.
+    Use ONLY the retrieved documentation in the user message.
+    Answer in the detected user language specified in the user message.
+    Prefer a practical answer over a long explanation: name the API, show one short code example,
+    then explain the key parameters or caveats that matter for the question.
+    Do not invent arguments, defaults, or behavior not present in the retrieved documentation.
+    If the context is weak or unrelated, say that the exact answer was not found in the documentation.
+
+  context_template: |
+    Source {index}
+    Function: {function_name}
+    Library: {library_name}
+    Parameters: {parameters}
+    Documentation:
+    {documentation}
+
+  user_template: |
+    Retrieved documentation:
+    {context}
+
+    User question: {query}
+
+    Detected user language: {language}
+
+    Answer requirements:
+    - Reply in the detected user language.
+    - Start with the most likely function or API to use.
+    - Include one short, runnable code example when useful.
+    - Explain only the most important parameters for this question.
+    - If the retrieved documentation is not enough, say what is missing instead of guessing.
+
+  max_chunk_chars: 1400
+  no_think: true

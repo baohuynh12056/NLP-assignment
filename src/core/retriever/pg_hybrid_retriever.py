@@ -43,7 +43,7 @@ class PGHybridRetrieverModel(BaseRetriever):
         logger.info(f"Executing hybrid search for query: '{query}'")
 
         # 1. Embed the query into a vector
-        query_vector = self.model.encode(query, normalize_embeddings=True).tolist()
+        query_vector = self.embed_model.encode(query, normalize_embeddings=True).tolist()
 
         # 2. Build dynamic metadata filters securely
         filter_clause = ""
@@ -85,6 +85,7 @@ class PGHybridRetrieverModel(BaseRetriever):
         chunks = []
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SET LOCAL ivfflat.probes = 100;")
                 cur.execute(sql_query, sql_params)
                 rows = cur.fetchall()
 

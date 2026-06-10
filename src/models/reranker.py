@@ -18,7 +18,9 @@ class DocumentReranker:
         self.reranker_model = reranker_model
 
         # Dynamically load the target number of chunks (top_k) from the global config
-        self.default_top_k = GLOBAL_CONFIG.get("reranker", {}).get("top_k", 5)
+        self.default_top_k = (
+            GLOBAL_CONFIG.get("models", {}).get("reranker", {}).get("top_k", 5)
+        )
 
     def process(self, query: str, candidate_chunks: List[Chunk]) -> List[Chunk]:
         """

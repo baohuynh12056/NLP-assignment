@@ -1,7 +1,9 @@
 # configs/retriever.yaml
 
 type: "pg_hybrid"
-embed_model_path: "BAAI/bge-based-en-v1.5" # Lightweight model for fast embedding
+embed_model_path: "BAAI/bge-small-en-v1.5" # Lightweight model for fast embedding
+retrieval_k: 12
+context_k: 4
 weights:
   semantic: 0.7  # Priority given to vector search
   keyword: 0.3   # FTS acts as a precise keyword booster

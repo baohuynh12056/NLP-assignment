@@ -2,7 +2,7 @@
 
 parser:
   type: "llama_cpp"
-  model_path: "models/qwen2.5-0.5b-instruct.gguf"
+  model_path: "models/final_gguf/qwen3-0.6b-instruct-q4_k_m.gguf"
   context_window: 512       
   gpu_layers: -1           
   temperature: 0.0          
@@ -11,7 +11,7 @@ parser:
 
 generator:
   type: "llama_cpp"
-  model_path: "models/qwen2.5-1.5b-instruct.gguf"
+  model_path: "models/final_gguf/qwen3-4b-instruct-q4_k_m.gguf"
   context_window: 4096      
   gpu_layers: -1
   temperature: 0.3          
@@ -22,5 +22,5 @@ reranker:
   type: "cross_encoder"                 
   model_path: "BAAI/bge-reranker-base"  
   max_length: 512
-  device: "cuda"                        
+  device: null
   top_k: 5
