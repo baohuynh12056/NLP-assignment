@@ -3,6 +3,7 @@ from models.retriever import DocumentRetriever
 from models.reranker import DocumentReranker
 from models.answer_generator import AnswerGenerator
 from core.schemas import Chunk, RAGResponse, SourceChunk
+from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
 # Initialize module logger
@@ -27,6 +28,8 @@ class RAGOrchestrator:
         self.retriever = retriever
         self.reranker = reranker
         self.answer_generator = answer_generator
+        retriever_cfg = GLOBAL_CONFIG.get("retriever", {})
+        self.fast_mode_rerank = bool(retriever_cfg.get("fast_mode_rerank", True))
 
     def run(self, user_query: str) -> str:
         return self.run_with_details(user_query, generate_answer=True).answer
@@ -64,13 +67,18 @@ class RAGOrchestrator:
                 sources=[],
             )
 
-        # Step 3: Rerank the candidates to get the most relevant top-K chunks
-        logger.info("[Step 3/4] Reranking Candidates...")
-        # Use the optimized query for semantic reranking
         refined_query = parsed_query.optimized_query or user_query
-        refined_chunks = self.reranker.process(
-            query=refined_query, candidate_chunks=raw_chunks
-        )
+        should_rerank = generate_answer or self.fast_mode_rerank
+        if should_rerank:
+            # Step 3: Rerank the candidates to get the most relevant top-K chunks
+            logger.info("[Step 3/4] Reranking Candidates...")
+            refined_chunks = self.reranker.process(
+                query=refined_query, candidate_chunks=raw_chunks
+            )
+        else:
+            logger.info("[Step 3/4] Skipping reranker for Fast mode...")
+            refined_chunks = raw_chunks[: self.reranker.default_top_k]
+
         refined_chunks = self._ensure_exact_function(refined_query, raw_chunks, refined_chunks)
 
         if not refined_chunks:

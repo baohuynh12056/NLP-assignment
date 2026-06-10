@@ -22,7 +22,7 @@ Important folders:
 
 - `configs/`: YAML configuration for models, prompts, and retrieval.
 - `src/core/llm/`: base LLM interface, llama.cpp implementation, and LLM factory.
-- `src/core/retriever/`: retriever interface, PostgreSQL hybrid retriever, and factory.
+- `src/core/retriever/`: retriever interface, PostgreSQL/FAISS retrievers, and factory.
 - `src/core/reranker/`: reranker interface, CrossEncoder reranker, and factory.
 - `src/models/`: business-level agents such as query parser and answer generator.
 - `src/pipeline/`: RAG orchestrator.
@@ -83,8 +83,30 @@ It controls:
 
 - embedding model path
 - retrieval count
+- retriever type: `faiss_local` or `pg_hybrid`
+- FAISS index/metadata paths
+- Fast mode reranking behavior
 - PostgreSQL connection
 - semantic/keyword fusion weights
+
+Current default:
+
+```yaml
+type: "faiss_local"
+index_path: "models/faiss/functions.index"
+metadata_path: "models/faiss/functions_metadata.jsonl"
+fast_mode_rerank: false
+```
+
+With this setting, Fast mode uses FAISS and skips the CrossEncoder reranker for
+much lower latency. Full mode still reranks before generation.
+
+To switch back to PostgreSQL hybrid search:
+
+```yaml
+type: "pg_hybrid"
+fast_mode_rerank: true
+```
 
 ## Web Chat UI
 
@@ -120,6 +142,26 @@ cd docker
 docker compose up -d
 cd ..
 ```
+
+Build the local FAISS retrieval index from PostgreSQL:
+
+```bash
+PYTHONPATH=src python src/tools/build_faiss_index.py
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH='src'
+python src\tools\build_faiss_index.py
+```
+
+This creates:
+
+- `models/faiss/functions.index`
+- `models/faiss/functions_metadata.jsonl`
+
+These files are local artifacts and are ignored by Git.
 
 Run the API:
 
@@ -185,6 +227,8 @@ Cloudflare will print a temporary public URL that can be shared for demos.
 ## Notes
 
 - `.gguf` files are ignored and should not be pushed to GitHub.
+- `models/faiss/` is ignored and should be rebuilt locally from PostgreSQL.
 - The first request after server start is slower because models are loaded lazily.
+- Warm Fast mode requests should be much faster with `faiss_local` because they avoid PostgreSQL vector search and skip CrossEncoder reranking.
 - Edit `configs/models.yaml` to switch models.
 - Edit `configs/prompts.yaml` to tune answer style and prompt format.

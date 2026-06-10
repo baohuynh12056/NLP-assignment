@@ -1,4 +1,5 @@
 from core.retriever.base import BaseRetriever
+from core.retriever.faiss_retriever import FAISSRetrieverModel
 from core.retriever.pg_hybrid_retriever import PGHybridRetrieverModel
 from typing import Dict, Any
 
@@ -12,6 +13,8 @@ class RetrieverFactory:
 
         if ret_type == "pg_hybrid":
             return PGHybridRetrieverModel(config)
+        if ret_type == "faiss_local":
+            return FAISSRetrieverModel(config)
         # elif ret_type == "elasticsearch":
         #     return ElasticsearchRetrieverModel(config)
         else:
