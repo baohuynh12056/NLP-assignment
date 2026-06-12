@@ -35,7 +35,10 @@ INDEX_HTML_PATH = Path(__file__).with_name("chat_ui.html")
 _pipeline_lock = Lock()
 _cache_lock = Lock()
 _response_cache: OrderedDict[str, RAGResponse] = OrderedDict()
+_conversation_lock = Lock()
+_conversation_state: OrderedDict[str, RAGResponse] = OrderedDict()
 CACHE_SIZE = int(GLOBAL_CONFIG.get("retriever", {}).get("cache_size", 128))
+MAX_CONVERSATIONS = 128
 
 app = FastAPI(
     title="Mini Code-Assistance RAG",
@@ -46,6 +49,7 @@ app = FastAPI(
 class AskRequest(BaseModel):
     query: str = Field(..., min_length=1)
     mode: str = Field("fast", pattern="^(fast|full)$")
+    conversation_id: str | None = Field(default=None, max_length=80)
 
 
 def initialize_orchestrator() -> RAGOrchestrator:
@@ -99,6 +103,98 @@ def _cache_set(mode: str, query: str, response: RAGResponse) -> None:
             _response_cache.popitem(last=False)
 
 
+def _conversation_get(conversation_id: str | None) -> RAGResponse | None:
+    if not conversation_id:
+        return None
+    with _conversation_lock:
+        response = _conversation_state.get(conversation_id)
+        if response is None:
+            return None
+        _conversation_state.move_to_end(conversation_id)
+        return response
+
+
+def _conversation_set(conversation_id: str | None, response: RAGResponse) -> None:
+    if not conversation_id:
+        return
+    with _conversation_lock:
+        _conversation_state[conversation_id] = response
+        _conversation_state.move_to_end(conversation_id)
+        while len(_conversation_state) > MAX_CONVERSATIONS:
+            _conversation_state.popitem(last=False)
+
+
+def _is_followup_query(query: str) -> bool:
+    normalized = " ".join((query or "").strip().lower().split())
+    if not normalized:
+        return False
+
+    exact_phrases = {
+        "more",
+        "more detail",
+        "more details",
+        "detail",
+        "details",
+        "explain more",
+        "tell me more",
+        "go deeper",
+        "elaborate",
+        "expand",
+        "more example",
+        "more examples",
+        "another example",
+        "nói rõ hơn",
+        "noi ro hon",
+        "chi tiết hơn",
+        "chi tiet hon",
+        "giải thích thêm",
+        "giai thich them",
+        "thêm chi tiết",
+        "them chi tiet",
+        "ví dụ nữa",
+        "vi du nua",
+        "mở rộng thêm",
+        "mo rong them",
+        "cụ thể hơn",
+        "cu the hon",
+        "tiếp tục",
+        "tiep tuc",
+    }
+    if normalized in exact_phrases:
+        return True
+
+    followup_markers = [
+        "more detail",
+        "more details",
+        "explain more",
+        "tell me more",
+        "go deeper",
+        "elaborate",
+        "another example",
+        "nói rõ",
+        "noi ro",
+        "chi tiết",
+        "chi tiet",
+        "giải thích thêm",
+        "giai thich them",
+        "mở rộng",
+        "mo rong",
+        "cụ thể hơn",
+        "cu the hon",
+        "ví dụ",
+        "vi du",
+    ]
+    return len(normalized.split()) <= 8 and any(
+        marker in normalized for marker in followup_markers
+    )
+
+
+def _effective_cache_query(request: AskRequest, previous: RAGResponse | None) -> str:
+    if previous is None or not _is_followup_query(request.query):
+        return request.query
+    return f"{previous.query} -> {request.query}"
+
+
 def _response_payload(response: RAGResponse) -> dict:
     if hasattr(response, "model_dump"):
         return response.model_dump()
@@ -131,17 +227,36 @@ def health() -> dict:
 @app.post("/ask", response_model=RAGResponse)
 def ask(request: AskRequest) -> RAGResponse:
     try:
-        cached = _cache_get(request.mode, request.query)
+        previous = _conversation_get(request.conversation_id)
+        is_followup = previous is not None and _is_followup_query(request.query)
+        cache_query = _effective_cache_query(request, previous)
+        cached = _cache_get(request.mode, cache_query)
         if cached is not None:
+            _conversation_set(request.conversation_id, cached)
             return cached
 
         # llama.cpp model instances should not be driven concurrently in this demo.
         with _pipeline_lock:
-            response = get_pipeline().run_with_details(
-                request.query,
-                generate_answer=request.mode == "full",
-            )
-            _cache_set(request.mode, request.query, response)
+            pipeline = get_pipeline()
+            if is_followup:
+                answer = pipeline.answer_generator.generate_followup(
+                    request.query,
+                    previous,
+                )
+                response = RAGResponse(
+                    query=request.query,
+                    optimized_query=previous.optimized_query,
+                    filters=previous.filters,
+                    answer=answer,
+                    sources=previous.sources,
+                )
+            else:
+                response = pipeline.run_with_details(
+                    request.query,
+                    generate_answer=request.mode == "full",
+                )
+            _cache_set(request.mode, cache_query, response)
+            _conversation_set(request.conversation_id, response)
             return response
     except Exception as exc:
         logger.exception("Failed to answer request")
@@ -152,8 +267,12 @@ def ask(request: AskRequest) -> RAGResponse:
 def ask_stream(request: AskRequest) -> StreamingResponse:
     def events() -> Iterator[str]:
         started_at = time.perf_counter()
-        cached = _cache_get(request.mode, request.query)
+        previous = _conversation_get(request.conversation_id)
+        is_followup = previous is not None and _is_followup_query(request.query)
+        cache_query = _effective_cache_query(request, previous)
+        cached = _cache_get(request.mode, cache_query)
         if cached is not None:
+            _conversation_set(request.conversation_id, cached)
             yield _json_line({"type": "meta", "cached": True})
             for chunk in _stream_text(cached.answer):
                 yield _json_line({"type": "token", "text": chunk})
@@ -170,6 +289,35 @@ def ask_stream(request: AskRequest) -> StreamingResponse:
         try:
             with _pipeline_lock:
                 pipeline = get_pipeline()
+                if is_followup:
+                    answer_parts = []
+                    for chunk in pipeline.answer_generator.stream_followup(
+                        request.query,
+                        previous,
+                    ):
+                        answer_parts.append(chunk)
+                        yield _json_line({"type": "token", "text": chunk})
+                    answer = pipeline.answer_generator._strip_thinking("".join(answer_parts))
+                    response = RAGResponse(
+                        query=request.query,
+                        optimized_query=previous.optimized_query,
+                        filters=previous.filters,
+                        answer=answer,
+                        sources=previous.sources,
+                    )
+                    _cache_set(request.mode, cache_query, response)
+                    _conversation_set(request.conversation_id, response)
+                    yield _json_line(
+                        {
+                            "type": "done",
+                            "response": _response_payload(response),
+                            "elapsed": round(time.perf_counter() - started_at, 2),
+                            "cached": False,
+                            "followup": True,
+                        }
+                    )
+                    return
+
                 parsed_query, chunks = pipeline.retrieve_context(
                     request.query,
                     generate_answer=request.mode == "full",
@@ -178,7 +326,8 @@ def ask_stream(request: AskRequest) -> StreamingResponse:
                 if not chunks:
                     answer = "I'm sorry, I couldn't find any relevant functions in the database to answer your query."
                     response = pipeline.build_response(request.query, parsed_query, chunks, answer)
-                    _cache_set(request.mode, request.query, response)
+                    _cache_set(request.mode, cache_query, response)
+                    _conversation_set(request.conversation_id, response)
                     yield _json_line({"type": "token", "text": answer})
                     yield _json_line(
                         {
@@ -193,7 +342,8 @@ def ask_stream(request: AskRequest) -> StreamingResponse:
                 if request.mode == "fast":
                     answer = pipeline._build_fast_answer(chunks)
                     response = pipeline.build_response(request.query, parsed_query, chunks, answer)
-                    _cache_set(request.mode, request.query, response)
+                    _cache_set(request.mode, cache_query, response)
+                    _conversation_set(request.conversation_id, response)
                     for chunk in _stream_text(answer):
                         yield _json_line({"type": "token", "text": chunk})
                 else:
@@ -203,7 +353,8 @@ def ask_stream(request: AskRequest) -> StreamingResponse:
                         yield _json_line({"type": "token", "text": chunk})
                     answer = pipeline.answer_generator._strip_thinking("".join(answer_parts))
                     response = pipeline.build_response(request.query, parsed_query, chunks, answer)
-                    _cache_set(request.mode, request.query, response)
+                    _cache_set(request.mode, cache_query, response)
+                    _conversation_set(request.conversation_id, response)
 
                 yield _json_line(
                     {

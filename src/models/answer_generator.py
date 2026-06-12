@@ -63,12 +63,53 @@ class AnswerGenerator:
         for chunk in self.llm.stream_chat_completion(messages):
             yield chunk
 
+    def generate_followup(self, query: str, previous_response) -> str:
+        """Generates an answer for a follow-up request using the previous turn."""
+        messages = self._build_followup_messages(query, previous_response)
+        return self._strip_thinking(self.llm.chat_completion(messages))
+
+    def stream_followup(self, query: str, previous_response):
+        """Streams an answer for a follow-up request using the previous turn."""
+        messages = self._build_followup_messages(query, previous_response)
+        for chunk in self.llm.stream_chat_completion(messages):
+            yield chunk
+
     def _build_messages(self, query: str, context_chunks: list) -> list[dict[str, str]]:
         context_str = self._build_context(context_chunks)
         user_message = self.user_template.format(
             context=context_str,
             query=query,
             language=self._detect_language(query),
+        )
+        if self.no_think:
+            user_message += "\n/no_think"
+
+        return [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+    def _build_followup_messages(self, query: str, previous_response) -> list[dict[str, str]]:
+        source_lines = []
+        for index, source in enumerate(previous_response.sources, start=1):
+            source_lines.append(
+                (
+                    f"[{index}] {source.library_name}.{source.function_name}\n"
+                    f"Snippet: {source.snippet}"
+                )
+            )
+
+        user_message = (
+            "The user is continuing the previous conversation.\n"
+            "Answer the follow-up using the previous question, previous answer, "
+            "and previous sources below. Do not start an unrelated retrieval topic.\n\n"
+            f"Previous question:\n{previous_response.query}\n\n"
+            f"Previous answer:\n{previous_response.answer}\n\n"
+            f"Previous sources:\n{chr(10).join(source_lines) or 'No sources'}\n\n"
+            f"Follow-up request:\n{query}\n\n"
+            "If the follow-up asks for more detail, expand the explanation with "
+            "practical usage, parameters, caveats, and a short code example when useful. "
+            f"Answer in {self._detect_language(query + ' ' + previous_response.query)}."
         )
         if self.no_think:
             user_message += "\n/no_think"

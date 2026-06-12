@@ -476,8 +476,8 @@
     </div>
     <div class="settings">
       <div class="mode" aria-label="Answer mode">
-        <label><input type="radio" name="mode" value="fast" checked />Fast</label>
-        <label><input type="radio" name="mode" value="full" />Full</label>
+        <label><input type="radio" name="mode" value="fast" />Fast</label>
+        <label><input type="radio" name="mode" value="full" checked />Full</label>
       </div>
       <div class="hint">Fast uses retrieval. Full uses the configured generator model.</div>
       <a href="/docs" target="_blank" rel="noreferrer">API docs</a>
@@ -497,6 +497,9 @@
     const drawerEl = document.getElementById("drawer");
     const backdropEl = document.getElementById("drawer-backdrop");
     const sourcesEl = document.getElementById("sources");
+    const conversationId = window.crypto && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     function openDrawer() {
       drawerEl.classList.add("open");
@@ -667,7 +670,7 @@
       const response = await fetch("/ask/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, mode }),
+        body: JSON.stringify({ query, mode, conversation_id: conversationId }),
       });
       if (!response.ok || !response.body) {
         const data = await response.json().catch(() => ({}));
@@ -685,39 +688,52 @@
       botBubble.classList.add("answer");
       metaEl.textContent = "Generating answer...";
 
+      function handleStreamEvent(event) {
+        if (event.type === "token") {
+          streamedText += event.text || "";
+          botBubble.textContent = streamedText;
+          scrollToBottom();
+        }
+        if (event.type === "done") {
+          finalResponse = event.response;
+          finalMeta = event;
+        }
+        if (event.type === "error") {
+          throw new Error(event.detail || "Stream failed");
+        }
+      }
+
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          const event = JSON.parse(line);
-          if (event.type === "token") {
-            streamedText += event.text || "";
-            botBubble.textContent = streamedText;
-            scrollToBottom();
-          }
-          if (event.type === "done") {
-            finalResponse = event.response;
-            finalMeta = event;
-          }
-          if (event.type === "error") {
-            throw new Error(event.detail || "Stream failed");
-          }
+          handleStreamEvent(JSON.parse(line));
         }
       }
 
       if (buffer.trim()) {
-        const event = JSON.parse(buffer);
-        if (event.type === "done") {
-          finalResponse = event.response;
-          finalMeta = event;
+        const lines = buffer.split("\n").filter((line) => line.trim());
+        for (const line of lines) {
+          try {
+            handleStreamEvent(JSON.parse(line));
+          } catch (error) {
+            if (!streamedText) throw error;
+          }
         }
       }
 
+      if (!finalResponse && streamedText) {
+        finalResponse = { answer: streamedText, sources: [] };
+        finalMeta = { partial: true };
+      }
       if (!finalResponse) throw new Error("Stream ended without a final response");
       renderAnswer(botBubble, finalResponse.answer);
       renderSources(finalResponse.sources || []);
@@ -750,7 +766,7 @@
         const response = await fetch("/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, mode }),
+          body: JSON.stringify({ query, mode, conversation_id: conversationId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "Request failed");
