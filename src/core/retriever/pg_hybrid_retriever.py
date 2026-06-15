@@ -8,7 +8,6 @@ from core.retriever.base import BaseRetriever
 from core.schemas import Chunk
 from utils.logger import get_logger
 
-# Initialize module logger
 logger = get_logger(__name__)
 
 

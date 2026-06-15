@@ -13,7 +13,6 @@ class RerankerFactory:
         if reranker_type == "cross_encoder":
             return CrossEncoderRerankerModel(config)
         elif reranker_type == "cohere_api":
-            # Placeholder for API in future expansion
-            pass
+            raise NotImplementedError("Cohere reranker backend is not implemented.")
         else:
             raise ValueError(f"Unsupported Reranker type: {reranker_type}")

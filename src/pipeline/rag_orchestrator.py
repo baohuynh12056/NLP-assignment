@@ -6,7 +6,6 @@ from core.schemas import Chunk, ParsedQuery, RAGResponse, SourceChunk
 from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
-# Initialize module logger
 logger = get_logger(__name__)
 
 

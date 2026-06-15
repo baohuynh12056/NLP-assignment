@@ -6,7 +6,6 @@ from core.schemas import ParsedQuery
 from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
-# Initialize module logger
 logger = get_logger(__name__)
 
 
@@ -15,7 +14,6 @@ class QueryParser:
 
     def __init__(self, llm: BaseLLM):
         self.llm = llm
-        # Load the parser system prompt from global configuration
         self.system_prompt = GLOBAL_CONFIG["prompts"]["parser"]["system"]
         self.supported_libraries = [
             "pandas",
@@ -49,7 +47,6 @@ class QueryParser:
                 {"role": "user", "content": raw_query},
             ]
 
-            # Force temperature to 0.0 for deterministic JSON extraction
             raw_output = self.llm.chat_completion(messages, temperature=0.0)
             parsed_data = self._parse_json_output(raw_output, raw_query)
 

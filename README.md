@@ -5,7 +5,7 @@ questions about Python library functions. The app combines local retrieval,
 optional reranking, local GGUF language models, prompt configuration, a FastAPI
 backend, and a chat-style web UI.
 
-The current version is optimized for demo usage:
+The default configuration is tuned for low-latency local demos:
 
 - FAISS local retrieval for faster search.
 - Fast mode for retrieval-first answers.
@@ -17,7 +17,7 @@ The current version is optimized for demo usage:
 
 ## Demo Questions
 
-Try these in the web chat:
+Suggested prompts:
 
 - `How do I merge two pandas DataFrames on a common column?`
 - `What is pandas.merge used for?`

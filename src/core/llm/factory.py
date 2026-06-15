@@ -13,7 +13,6 @@ class LLMFactory:
         if llm_type == "llama_cpp":
             return LlamaCPPModel(config)
         elif llm_type == "openai":
-            # return OpenAIModel(config) # Reserved for future expansion
-            pass
+            raise NotImplementedError("OpenAI LLM backend is not implemented.")
         else:
             raise ValueError(f"Unsupported LLM type: {llm_type}")

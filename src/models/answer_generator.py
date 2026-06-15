@@ -5,7 +5,6 @@ from core.llm.base import BaseLLM
 from utils.config_loader import GLOBAL_CONFIG
 from utils.logger import get_logger
 
-# Initialize module logger
 logger = get_logger(__name__)
 
 
@@ -42,8 +41,6 @@ class AnswerGenerator:
 
         messages = self._build_messages(query, context_chunks)
 
-        # Call the LLM to generate the final response
-        # Note: temperature and max_tokens are handled by the BaseLLM configuration
         final_answer = self._strip_thinking(self.llm.chat_completion(messages))
 
         logger.info("Final answer generated successfully.")
