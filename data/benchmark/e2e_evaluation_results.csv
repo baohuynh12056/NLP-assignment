@@ -1,0 +1,51 @@
+query,base_score,base_latency
+How do I use the scipy.linalg.leslie function to create a Leslie matrix?,3,27.575891971588135
+How can I use the scipy.stats.rv_histogram function to generate a distribution from a binned datasample?,3,26.25487470626831
+"How can I use the pandas.Series.rsub function to perform element-wise subtraction between two Series, with the option to fill missing values?",3,26.436891078948975
+How can I use the `set_params` method to update the parameters of a `StandardScaler` object?,3,21.31426429748535
+How can I convert a pandas Series to an xarray object?,3,25.165782928466797
+How can I use numpy.mask_indices to mask out certain elements in a 2D array?,3,25.32711362838745
+How can I determine if a tensor is symbolic in TensorFlow?,3,18.735676050186157
+How can I determine if a tensor is in a contiguous layout using the Tag class?,3,25.8385009765625
+How do I find the antiderivative of a polynomial using numpy.polyint?,3,25.65601944923401
+How can I use the RandomElasticTransform layer to apply elastic transformations to my images?,3,26.724467039108276
+How do I configure the tick labels for a plot using matplotlib's ticklabel_format function?,3,23.974181175231934
+How can I use the dot function to compute the cosine similarity between two sets of vectors?,3,26.950254201889038
+How can I use the scipy.stats.boxcox function to perform a Box-Cox power transformation on a dataset?,3,24.883083820343018
+How do I calculate the relative condition number of the matrix exponential using the scipy.linalg.expm_cond function?,3,28.65511918067932
+How can I use the autocast function to run operations in mixed precision in my script?,3,25.72303533554077
+How do I use the scipy.linalg.funm function to evaluate a matrix function?,3,25.89948844909668
+How can I convert columns in a pandas DataFrame to the best dtypes that support pd.NA?,3,24.49136710166931
+How can I use the Normalizer function to normalize my data?,3,22.854357481002808
+How do I convert a float tensor to a quantized tensor with dynamic scale and zero_point calculation using the `torch.quantize_per_tensor_dynamic` function?,3,25.493695497512817
+How does the `torch.tensordot` function work and what is its purpose?,3,28.703226804733276
+How can I sort a pandas Series by its index labels?,3,24.18396830558777
+How does the `tensorflow.register_tensor_conversion_function` function work?,3,30.264293909072876
+How can I use the torch.nn.UpsamplingNearest2d function to resize an image?,3,29.109232187271118
+How can I use the FlaxLayer function to wrap a Flax module in Keras?,3,23.388879776000977
+How do I generate random variates for a Laplace distribution?,3,26.90970730781555
+How can I use the numpy.ndindex function to iterate over the indices of an array?,3,20.734591484069824
+How do I compute the inverse of a complex Hermitian or real symmetric positive-definite matrix given its Cholesky decomposition?,3,27.052659511566162
+How can I create a tensor with a specific size and stride filled with undefined data?,3,22.463330268859863
+How can I use the `tf.scatter_nd` function to update a tensor with new values at specific indices?,3,23.067069053649902
+How can I use the Yeo-Johnson log-likelihood function to transform my data?,3,29.525075674057007
+How do I use the scipy.linalg.convolution_matrix function to perform one-dimensional convolution on an array?,3,30.17975354194641
+How can I use the `tf.custom_gradient` function to compute the gradient of a function with numerical stability?,3,26.933003425598145
+How can I use the fastapi.FastAPI.websocket function to create a WebSocket endpoint in my FastAPI application?,3,15.47226595878601
+How do I use the logistic function to solve a problem involving probability?,3,23.738412141799927
+How do I set the y-axis label using matplotlib.pyplot.ylabel?,3,16.870452165603638
+How can I split a tensor into multiple tensors based on specific indices or sections?,3,28.08543062210083
+How can I use the ScalarFormatter function to format tick values as a number in matplotlib?,3,22.110809326171875
+How can I use MinMaxScaler to normalize my data?,3,25.778727769851685
+How can I use the torch.nn.MaxPool2d function to apply max pooling on an input tensor?,2,26.937432050704956
+How do I sort a pandas Series by its values in ascending order?,3,23.09770131111145
+How does the SmoothL1Loss function work?,1,32.691648721694946
+How does the Mish function work and what is its purpose?,3,25.460445880889893
+How can I generate a random unitary matrix using the scipy.stats.unitary_group function?,3,27.702364444732666
+How do I use the numpy.histogram function to count the frequency of values in a dataset?,3,26.662417888641357
+How can I compare two tensors element-wise and return a boolean tensor indicating which elements are not equal?,3,21.395729303359985
+How do I calculate the product of all non-NA values in a DataFrame?,3,31.173370361328125
+How can I use the torch.diagonal_scatter function to embed values from one tensor into another along the main diagonal?,3,25.29450559616089
+How do I use the numpy.bmat function to create a block matrix from a string input?,3,25.996488571166992
+How do I use the seaborn.heatmap function to create a heatmap from a 2D dataset?,3,24.395398378372192
+How can I use the transform function to apply a custom aggregation function to each column in a DataFrame?,3,26.127336978912354

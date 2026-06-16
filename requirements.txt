@@ -7,3 +7,8 @@ uvicorn
 pydantic
 pyyaml
 faiss-cpu
+matplotlib
+peft
+pandas
+datasets
+seaborn
